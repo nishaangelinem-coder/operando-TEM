@@ -47,11 +47,15 @@ maximum Pt surface density, roughly an order of magnitude below where
 atomically dispersed Pt is usually prepared. That is actionable in a way that
 "more statistics are needed" is not.
 
-**2.4 The negative results are reported properly.** The in-sample versus
-held-out closed-loop comparison (+6.9 % then −0.7 %, p = 0.90) is exactly the
-comparison most papers omit, and reporting it is the paper's strongest signal of
-good faith. The same is true of the hypothesis failing its own pre-specified
-first test.
+**2.4 The negative results are reported properly, and one of them is
+load-bearing.** The in-sample versus held-out closed-loop comparison (+9.0 %
+then 0.98×, p = 0.67) is exactly the comparison most papers omit, and reporting
+it is the paper's strongest signal of good faith. Better still, the paper does
+not stop at the null: it shows the actuation budget was three times too small
+against the relevant dissociation time, which converts "it did not work" into
+"here is how large the budget must be". The same discipline applies to the
+hypothesis failing its own pre-specified first test, and to the discovery that
+the reactor's actuators are too weak to serve as instruments.
 
 **2.5 The size-dependent detection bias (§4.1, §4.3) is a real and general
 hazard.** A monomer at the detection threshold and a dimer above it means the
@@ -103,7 +107,8 @@ than in a limitations subsection, and arguably in the abstract.
 **4.1 The counterfactual regime carries most of the estimator validation, and it
 is physically impossible.** Studies S3, S4 and S7d all run at f_rep = 1 with a
 detector of matching sensitivity — a regime the paper itself shows is excluded by
-about ten orders of magnitude. The labelling is scrupulous, but a reader could
+nearly twelve orders of magnitude. The labelling is scrupulous, but a reader
+could
 still come away thinking the event-aligned estimator has been validated for use.
 It has been validated as an *estimator*; it has not been shown to have an
 application. The paper should probably lead §4.4 with that tension rather than
@@ -117,19 +122,26 @@ observational/interventional contrast (2SLS s.d. 0.294 on a point estimate of
 compute budget, and the paper should either raise the seed count or drop the
 underpowered comparisons rather than report them as suggestive.
 
-**4.3 The weak instrument undermines the causal-inference claim.** First-stage
-R² = 0.009 is a textbook weak instrument. The paper notes this and turns it into
-a design requirement, which is the right move, but it means the paper's headline
-framing — "the actuators are available as instruments for identification" — is
-demonstrated only in principle. A referee is entitled to ask for a simulated
-actuator strong enough to make the 2SLS estimate precise, which would test
-whether the estimator works when its assumptions hold.
+**4.3 The causal-inference framing does not survive its own test, and the
+paper should say so earlier.** The framework is introduced partly on the premise
+that the reactor's actuators can serve as instruments. They cannot: first-stage
+R² is 0.015 for a short oxygen pulse and only 0.051 for one four times longer
+and three times stronger, and the resulting 2SLS estimates are useless
+(0.35 ± 1.05 and −0.24 ± 1.16 against a target of 0.091). The paper reports
+this honestly in §4.5 and §5.1, but §2 still sets up the actuators-as-
+instruments idea without warning the reader that it will fail. More importantly,
+what *does* work is prosaic — a multivariable regression over the full motif
+census recovers the target to within 7 % — and the error that actually bites is
+omitting a co-varying motif (a factor-2.2 inflation). The framing should be
+rebalanced towards that finding, which is more useful to practitioners than the
+causal machinery is.
 
 **4.4 One free parameter links the two levels of the twin, and the fit is only
 7–9 %.** The chip mean field reproduces the kMC ensemble to 7.1 % on the monomer
 trajectory and 8.7 % on the rate. Every chip-level number — the whole
 representativeness argument — inherits that. The argument is robust because it
-turns on ten orders of magnitude rather than ten per cent, but the paper should
+turns on twelve orders of magnitude rather than ten per cent, but the paper
+should
 say so explicitly instead of leaving the reader to notice.
 
 **4.5 The catalyst-area multiplier (3.5 × 10⁴) is the single most load-bearing
@@ -137,7 +149,8 @@ number in the paper and it is an estimate.** It converts the projected area
 ratio into f_rep and therefore sets the ten-orders-of-magnitude claim. It is
 justified from a plausible film thickness and specific surface area, but it is
 not measured, and a factor of 30 either way is defensible. The claim survives
-easily — the shortfall is ~10¹¹, so even three orders of magnitude of error
+easily — the shortfall is 6.6 × 10¹¹ and does not depend on the multiplier at
+all (Table S7b), so even three orders of magnitude of error
 changes nothing qualitatively — but the paper should present a sensitivity band
 rather than a point value.
 
@@ -171,13 +184,19 @@ coinage oversells it. A referee will say so.
 | Field diverges from chip under the beam | Table S7c, −17 % to −74 % | Supported |
 | Dynamic descriptors add ~0 to instantaneous R² | Table S2b, ΔR² = 0.0006 | Supported |
 | Dynamic descriptors add forecast skill | Table S2c, +0.027 at 120 s | Weakly supported; 5 seeds, small effect |
-| Closed loop does not beat a matched schedule | Table S8b, p = 0.90 held out | Supported as a null; underpowered to exclude a small gain |
+| Multivariable fit recovers a known coefficient; univariate inflates it 2.2x | Table S4c, 20 seeds per arm | Supported |
+| A gas pulse is too weak an instrument | Table S4c, first-stage R2 0.015 and 0.051 | Supported |
+| Randomised perturbation identifies a chip-wide response; periodic does not | Table S7g, p = 0.020 vs 0.89 | Supported |
+| The structure-mediated component is not separated | Table S7g, p = 0.23 after gap blanking | Supported as a null, with a kinetic explanation |
+| Closed loop does not beat a matched schedule | Table S8b, p = 0.67 held out, MDE 12.5% | Supported as an exclusion above 12.5%, with a mechanistic cause |
 | BPI tracks truth under the linear model | Table S6c, within 15 % and 1 % | Supported inside the usable dose window |
 | Projection bias not correctable at 6.6 nm | Table S5, η flat at 0.22 vs truth 0–0.41 | Supported |
 
-No claim in the manuscript is unsupported by its own tables. Two are weaker than
-the prose suggests (forecast skill, and the closed-loop null as an exclusion
-rather than a failure to detect).
+No claim in the manuscript is unsupported by its own tables. One remains weaker
+than the prose suggests: the forecast-skill gain of 0.027 in R2 rests on five
+seeds and is not accompanied by an uncertainty on the difference. The
+closed-loop null is now properly bounded by a stated minimum detectable effect
+and, more usefully, explained by the budget arithmetic.
 
 ---
 
@@ -246,14 +265,16 @@ Reply: present the shortfall as a function of it. The conclusion is unchanged
 over three orders of magnitude, which is far wider than the plausible range.
 
 **"Four seeds is not a study."**
-Reply: valid. Raise the seed count for the underpowered comparisons, or remove
-them.
+Reply: acted on — S4 and S8 now use 20 and 24 seeds respectively, and the
+control study reports a minimum detectable effect (12.5 %) so its null reads as
+an exclusion rather than a shrug. S5, S7 and the S3 controls remain at four,
+and should be raised.
 
 **"The closed-loop null may just be low power."**
-Reply: valid, and the paper should state the minimum detectable effect rather
-than only the p-value. The point estimate is −0.7 % with a paired s.d. of about
-115 on yields of ~860, so effects above roughly 10 % would have been detected;
-the paper can exclude a large gain but not a small one.
+Reply: acted on. The paper now reports the minimum detectable effect directly:
+112 molecules, or 12.5 % of baseline, on 14 held-out pairs. It excludes a gain
+larger than that and detects nothing smaller — and it explains the null
+mechanistically, which is the stronger answer.
 
 **"Nothing here could not have been said in a comment on the existing
 literature."**
@@ -264,22 +285,31 @@ the operating envelope, the power curves and the two refutations could not.
 
 ## 9. What would most improve the paper
 
-In priority order:
+Items 1-4 and 6 were acted on before the final version; 5, 7 and 8 remain open.
 
-1. **Move the simulated-data declaration into the first sentence of the
-   abstract**, not just above it.
-2. **Raise the seed count** to at least 20 for S4c and S8, and report a minimum
-   detectable effect for every null.
-3. **Present f_rep as a sensitivity band** over the catalyst-area multiplier.
-4. **Add a strong-instrument arm** to S4b so the 2SLS estimator is tested where
-   its assumptions hold.
-5. **Add a bursty-deactivation mode to the twin** and re-run S8; that is the
-   condition under which event-triggered control should win, and testing it
-   converts a null into a scoped claim.
-6. **Watermark the rendered micrograph panels.**
-7. **Split the manuscript** as in §7.
-8. **Drop or downgrade "Catalytic Event Microscopy"** as a coinage; the assembly
-   is the contribution and does not need a name.
+1. ~~**Move the simulated-data declaration into the first sentence of the
+   abstract**~~ — done.
+2. ~~**Raise the seed count** for S4c and S8 and report a minimum detectable
+   effect~~ — done (20 and 24 seeds; MDE 12.5 %). Still outstanding for S5, S7
+   and the S3 controls, which remain at four seeds.
+3. ~~**Present f_rep as a sensitivity band**~~ — done (Table S7b, four decades).
+4. ~~**Add a strong-instrument arm**~~ — done, and it failed: first-stage R2
+   rose only from 0.015 to 0.051, which is itself the finding.
+5. **Add a bursty-deactivation mode to the twin** and re-run S8. Still open, and
+   now better motivated: the budget arithmetic explains the null on its own, so
+   the bursty case tests a separate claim rather than rescuing this one.
+6. ~~**Watermark the rendered micrograph panels**~~ — done.
+7. **Split the manuscript** as in §7. Still open.
+8. **Drop or downgrade "Catalytic Event Microscopy"** as a coinage. Still open.
+
+One item should be added in light of the final results:
+
+9. **Rebalance §2 towards what worked.** The paper is framed around causal
+   inference with actuators as instruments, and that element failed its test.
+   The estimator that actually recovers a known coefficient is an ordinary
+   multivariable regression specified over the full motif census, and the error
+   that actually bites is omitted-variable bias. A reader should meet that
+   framing first.
 
 ---
 
@@ -295,6 +325,15 @@ underpowered, and the framing occasionally implies more than simulation can
 deliver. Its integrity practices are better than the norm, and its two
 self-refutations are the reason to trust the rest.
 
+A further point in its favour emerged late: three of the paper's own proposals
+failed their tests (dynamic descriptors, actuators-as-instruments, closed-loop
+control), and in two of the three the paper does not stop at the null but
+identifies the quantitative condition that would have to change — an actuation
+budget comparable to the motif's dissociation time, an actuator that moves the
+structural variable persistently. That is the difference between a negative
+result and a specification.
+
 **Verdict as submitted:** major revision for a microscopy or computational
-venue; reject for a catalysis venue. **Verdict after the eight items in §9:**
-a strong paper, with a genuinely load-bearing negative result.
+venue; reject for a catalysis venue. **Verdict after the remaining items in
+§9:** a strong paper, carried by negative results that are load-bearing rather
+than merely honest.

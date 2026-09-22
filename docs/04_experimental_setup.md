@@ -205,15 +205,21 @@ justification:
 |---|---|---|
 | Reactor pressure | 700 mbar | within the demonstrated operando-TEM envelope [R1] |
 | Temperature | 250–400 °C, baseline 300 °C | CO-oxidation light-off range for Pt |
-| τ_dead | 3.2 s at baseline flow | order of magnitude of nanoreactor + capillary + QMS inlet |
-| σ_disp | 0.9 s | consistent with a ~100 nL cell plus capillary at a few sccm |
+| τ_dead | 3.202 s at 2 sccm, scaling as 1/flow | order of magnitude of nanoreactor + capillary + QMS inlet |
+| σ_disp | 0.838 s at 2 sccm | consistent with a ~100 nL cell plus capillary at a few sccm |
 | QMS rate | 10 Hz | typical multi-channel QMS |
 | Analysis bin | 1.0 s | matches QMS and Layer-3 budget |
 | Dose-rate series | 1×10² to 1×10⁴ e⁻ Å⁻² s⁻¹, 5 points | brackets low-dose practice [R10] far below manipulation regimes [R15] |
 | Lateral localisation σ | 0.25 Å at reference dose, ∝ dose^(−1/2) | achievable single-atom precision |
 | Depth "resolution" | 6.6 nm for single-projection snapshots | measured value [R8] |
 | Product enrichment, inlet→outlet | 18 % | within the 12–21 % range reported for cell non-uniformity [R4] |
-| f_rep | 3.1×10⁻⁴ (one 40 × 40 nm field of a 200 × 50 µm zone) | computed from the chip geometry above |
+| Projected area fraction | 1.6×10⁻⁷ (one 40 × 40 nm field of a 200 × 50 µm zone) | computed from the chip geometry above |
+| Catalyst area multiplier | 3.5×10⁴ | Pt-accessible area of a ~100 nm film of 5 nm nanocrystals (equivalently a few µg of a ~50 m² g⁻¹ powder) relative to the projected zone area. **Estimated, not measured**; study S7 reports the conclusion's sensitivity to it over four decades |
+| f_rep | 4.6×10⁻¹² | projected area fraction divided by the catalyst area multiplier |
+| QMS detection limit | 1 ppm mole fraction | a quadrupole measures a *concentration*, so its flux limit is x_min × F and scales with the flow |
+| Hop barrier, terrace | 1.32 eV | chosen so that the monomer hop rate is a few s⁻¹ at 300 °C, i.e. resolvable at 5 frames s⁻¹ |
+| Beam coupling β | 2.0×10⁻⁴ s⁻¹ per e⁻ Å⁻² s⁻¹ | chosen so that the beam contributes ~11 % of hops at the reference dose and ~49 % at 10⁴ e⁻ Å⁻² s⁻¹ — a deliberately strong confound |
+| Support corrugation | A = 0.70 nm, λ = 5.0 nm | gives η = A²q²/4 = 0.19, i.e. a ~16 % projection bias in mean-squared displacement |
 
 **These are plausible, cited-where-possible values for a *simulation*, not
 measurements.** No claim is made that the twin reproduces any specific published
@@ -225,15 +231,16 @@ dataset.
 
 | ID | Question | Key output |
 |---|---|---|
-| S1 | Can h(t) be recovered from tracer pulses? | τ_dead, σ_disp vs truth; Table 2 |
-| S2 | Do dynamic descriptors beat census descriptors? | R² comparison; Table 4 |
-| S3 | Does the event-aligned estimator detect the true effect, and with what power? | Δr with CI, null, power curve; Table 5, Fig. 4 |
-| S4 | What happens if transport is not corrected? | lead–lag sign inversion; Fig. 5 |
-| S4b | Observational vs interventional estimate under confounding | Table 6 |
-| S5 | How biased is 2D-projected mobility? | MSD bias and correction; Table 7 |
-| S6 | Can k_chem be separated from k_beam? | BPI, intercept fit; Table 8, Fig. 6 |
-| S7 | How heterogeneous is the recovered effect across positions? | per-position Δr; Fig. 7 |
-| S8 | Does closed-loop control beat open loop and a matched fixed schedule? | yield, dispersion; Table 9, Fig. 8 |
+| S0 | Does the fast observation model reproduce the pixel-level detector? | Table S0 |
+| S1 | Can h(t) be recovered from tracer pulses, at every flow? | Table S1 |
+| S2 | How biased is each descriptor, and do dynamic descriptors earn their place? | Tables S2a–S2d |
+| S3 | When does the event-aligned estimator work, and where does its attenuation come from? | Tables S3a–S3c |
+| S4 | What does skipping the transport correction cost? | Tables S4a–S4b |
+| S4b | Does a multivariable observational estimate recover a known coefficient, and is a gas pulse a usable instrument? | Table S4c |
+| S5 | How biased is projected mobility, and can 3D snapshots correct it? | Table S5 |
+| S6 | Can the chemical rate be separated from the beam's, and over what dose window? | Tables S6a–S6c |
+| S7 | Is the imaged field representative, and can a single event ever be seen in the product? | Tables S7a–S7g |
+| S8 | Does closed-loop control beat a budget-matched schedule out of sample? | Tables S8a–S8b |
 
 ---
 

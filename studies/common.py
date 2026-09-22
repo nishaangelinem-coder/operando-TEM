@@ -44,8 +44,12 @@ def k_enc(cfg: Config = DEFAULT, recompute: bool = False) -> float:
         return float(d.get("k_enc", d.get("data", {}).get("k_enc")))
     cal = truth.calibrate_k_enc(cfg)
     os.makedirs(report.RAW, exist_ok=True)
+    payload = {"_provenance": {"simulated": True,
+                               "banner": report.SIMULATED_BANNER,
+                               "git": report.git_sha(), "seed": cfg.seed},
+               **cal}
     with open(K_ENC_CACHE, "w") as fh:
-        json.dump(cal, fh, indent=2)
+        json.dump(payload, fh, indent=2)
     return float(cal["k_enc"])
 
 

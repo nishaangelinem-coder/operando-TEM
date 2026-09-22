@@ -378,13 +378,15 @@ def fig5_correction() -> None:
     b = ax[1]
     for i, meth in enumerate(order):
         v = df.loc[df.correction == meth, "rate_rmse"]
-        b.bar(i, v.mean(), yerr=v.std(), color=cols[meth], width=0.62,
-              capsize=4)
-        b.text(i, v.mean() * 1.15, f"{v.mean():.3f}", ha="center",
+        sd = v.std() if np.isfinite(v.std()) else 0.0
+        b.bar(i, v.mean(), yerr=sd, color=cols[meth], width=0.62, capsize=4)
+        b.text(i, (v.mean() + sd) * 1.18, f"{v.mean():.4f}", ha="center",
                fontsize=7.5, color=P["neutral"])
     b.set_xticks(range(len(order))); b.set_xticklabels(order)
     b.set(yscale="log", ylabel=r"rate RMSE (molecules s$^{-1}$)",
           title="(b) rate reconstruction error")
+    lo, hi = b.get_ylim()
+    b.set_ylim(lo, hi * 2.2)
 
     c = ax[2]
     for i, meth in enumerate(order):
@@ -395,8 +397,13 @@ def fig5_correction() -> None:
     c.axhline(td, color=P["accent"], ls="--", lw=1.0,
               label=rf"$\tau_\mathrm{{dead}}$ = {td:.2f} s")
     c.axhline(0.0, color=P["truth"], ls=":", lw=1.0, label="true lag = 0")
+    frac = ll.loc[ll.correction == "raw", "significant"].mean()
+    c.text(0.02, 0.62, f"called significant\nin {frac:.0%} of runs",
+           transform=c.transAxes, fontsize=7, color=P["neutral"])
     c.set_xticks(range(len(order))); c.set_xticklabels(order)
     c.set(ylabel="lead-lag peak (s)", title="(c) apparent lead-lag")
+    lo, hi = c.get_ylim()
+    c.set_ylim(lo, hi + 0.30 * (hi - lo))
     c.legend(fontsize=7, loc="upper right")
     report.save_figure(fig, "fig5_correction",
                        "What skipping the transport correction costs. Without "
@@ -412,55 +419,80 @@ def fig6_beam() -> None:
     if s6 is None:
         return
     g = frame(s6["grouped"]); fits = frame(s6["fits"]); bpi = frame(s6["bpi"])
-    row = fits.iloc[0]
-    fig, ax = plt.subplots(1, 3, figsize=(7.2, 2.5))
+    gate = s6.get("usable_gate", 0.8)
+    k_eff_0 = s6.get("k_eff_zero_dose", np.nan)
+    lin = fits.iloc[0]; site = fits.iloc[1]; fd = fits.iloc[2]
+    # JSON round-trips booleans as 0/1, and a numeric Series passed to
+    # DataFrame.__getitem__ is read as a column selector, not a mask.
+    usable = g.usable.astype(bool)
+    use, bad = g[usable], g[~usable]
+    fig, ax = plt.subplots(1, 3, figsize=(7.2, 2.6))
 
     a = ax[0]
-    a.errorbar(g.dose_rate, g.k_hop_obs, yerr=g.k_hop_sem.fillna(0), fmt="o",
-               ms=5, color=P["observed"], capsize=3, label="observed")
-    xx = np.linspace(0, g.dose_rate.max() * 1.05, 50)
-    a.plot(xx, row.k_chem_fit + row.beta_fit * xx, color=P["corrected"],
-           label="dose-series fit")
-    a.plot(g.dose_rate, g.truth_hop_total, "s--", ms=4, mfc="none",
-           color=P["truth"], label="true total hop rate")
-    a.axhline(row.k_chem_true, color=P["accent"], ls=":", lw=1.0,
-              label=rf"true $k_\mathrm{{chem}}$ = {row.k_chem_true:.2f}")
-    a.set(xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
+    a.errorbar(use.dose_rate, use.k_hop_obs, yerr=use.k_hop_sem.fillna(0),
+               fmt="o", ms=5, color=P["observed"], capsize=3,
+               label="observed (usable)")
+    a.scatter(bad.dose_rate, bad.k_hop_obs, marker="x", s=28,
+              color=P["uncorrected"], label="excluded by the gate")
+    a.plot(g.dose_rate, g.k_eff_true, "s--", ms=4, mfc="none",
+           color=P["truth"], label="true effective hop rate")
+    xx = np.linspace(0, g.dose_rate.max() * 1.05, 60)
+    a.plot(xx, lin.zero_dose_value + lin.beta_fit * xx, color=P["uncorrected"],
+           ls="-", lw=1.1, label="linear fit")
+    a.scatter([0], [lin.zero_dose_value], marker="*", s=70,
+              color=P["uncorrected"], zorder=5)
+    a.scatter([0], [site.zero_dose_value], marker="*", s=70,
+              color=P["corrected"], zorder=5, label="site-aware intercept")
+    a.axhline(k_eff_0, color=P["accent"], ls=":", lw=1.0,
+              label=rf"truth at zero dose = {k_eff_0:.2f}")
+    a.set(xscale="log", xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
           ylabel=r"hop rate (s$^{-1}$)", title="(a) dose series")
-    a.legend(fontsize=6.6, loc="upper left")
+    a.set_ylim(0, max(g.k_hop_obs.max(), g.k_eff_true.max()) * 1.55)
+    a.legend(fontsize=5.8, loc="upper left", ncol=2, columnspacing=0.8,
+             handlelength=1.4)
 
     b = ax[1]
-    b.plot(bpi.dose_rate, bpi.bpi_from_fit, "o-", ms=5, color=P["corrected"],
-           label="BPI from fit")
-    b.fill_between(bpi.dose_rate, bpi.bpi_ci_lo, bpi.bpi_ci_hi,
-                   color=P["corrected"], alpha=0.25, lw=0, label="95% CI")
-    b.plot(bpi.dose_rate, bpi.bpi_truth_hops, "s--", ms=4, mfc="none",
-           color=P["truth"], label="true beam fraction of hops")
+    b.plot(bpi.dose_rate, bpi.bpi_linear_fit, "o-", ms=5,
+           color=P["uncorrected"], label="linear model")
+    b.fill_between(bpi.dose_rate, bpi.bpi_linear_ci_lo, bpi.bpi_linear_ci_hi,
+                   color=P["uncorrected"], alpha=0.22, lw=0)
+    b.plot(bpi.dose_rate, bpi.bpi_site_aware_fit, "^-", ms=5,
+           color=P["corrected"], label="site-aware model")
+    b.plot(bpi.dose_rate, bpi.bpi_analytic_truth, "s--", ms=5, mfc="none",
+           color=P["truth"], label="analytic truth")
     b.axhline(DEFAULT.analysis.bpi_exclusion_threshold, color=P["observed"],
               ls=":", label="pre-registered threshold")
-    b.set(xscale="log", xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
-          ylabel="beam perturbation index",
-          title="(b) BPI vs truth")
-    b.legend(fontsize=6.6, loc="upper left")
+    b.set(xscale="log",
+          xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
+          ylabel="beam perturbation index", title="(b) BPI vs truth")
+    # a log axis spanning one decade puts minor ticks on top of each other
+    b.set_xticks([2e3, 5e3, 1e4, 2e4])
+    b.set_xticklabels(["2k", "5k", "10k", "20k"])
+    b.set_xticks([], minor=True)
+    b.legend(fontsize=6.2, loc="upper left")
 
     c = ax[2]
-    c.errorbar(g.dose_rate, g.frac_dispersed,
-               yerr=g.frac_dispersed_sem.fillna(0), fmt="o", ms=5,
-               color=P["observed"], capsize=3, label="observed")
-    fd = fits.iloc[2]
-    c.plot(xx, fd.k_chem_fit + fd.beta_fit * xx, color=P["corrected"],
+    c.errorbar(use.dose_rate, use.frac_dispersed,
+               yerr=use.frac_dispersed_sem.fillna(0), fmt="o", ms=5,
+               color=P["observed"], capsize=3, label="observed (usable)")
+    c.scatter(bad.dose_rate, bad.frac_dispersed, marker="x", s=28,
+              color=P["uncorrected"], label="excluded by the gate")
+    c.plot(xx, fd.zero_dose_value + fd.beta_fit * xx, color=P["corrected"],
            label="zero-dose extrapolation")
-    c.scatter([0], [fd.k_chem_fit], marker="*", s=90, color=P["accent"],
-              zorder=5, label=f"beam-free estimate {fd.k_chem_fit:.2f}")
+    c.scatter([0], [fd.zero_dose_value], marker="*", s=90, color=P["accent"],
+              zorder=5, label=f"beam-free estimate {fd.zero_dose_value:.2f}")
     c.set(xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
-          ylabel="dispersed fraction",
-          title="(c) the reported observable")
-    c.legend(fontsize=6.6, loc="upper right")
+          ylabel="dispersed fraction", title="(c) the reported observable")
+    c.set_xticks([0, 5000, 10000, 15000, 20000])
+    c.set_xticklabels(["0", "5k", "10k", "15k", "20k"])
+    c.legend(fontsize=6.2, loc="lower left")
     report.save_figure(fig, "fig6_beam",
-                       "Separating chemistry from irradiation. The zero-dose "
-                       "intercept of a dose series recovers the chemical hop "
-                       "rate; the Beam Perturbation Index tracks the "
-                       "simulator's true beam-attributed event fraction; the "
+                       "Separating chemistry from irradiation. (a) the dose "
+                       f"series, with doses below the {gate:.2f} "
+                       "persistent-track gate excluded because false positives "
+                       "dominate the tracking, and the two zero-dose "
+                       "intercepts; (b) the Beam Perturbation Index under both "
+                       "dose models against the analytic truth; (c) the "
                        "reported dispersed fraction is itself dose-dependent "
                        "and needs extrapolating.")
     plt.close(fig)
@@ -476,28 +508,34 @@ def fig7_representativeness() -> None:
     a = ax[0]
     if s7a:
         tr = frame(s7a["tradeoff"])
-        a.plot(tr.flow_sccm, tr.chip_rate_over_limit, "o-", ms=5,
-               color=P["truth"], label="chip signal / MS limit")
-        a.axhline(3.0, color=P["observed"], ls=":", label=r"3$\times$ limit")
-        a.set(xscale="log", yscale="log", xlabel="flow (sccm)",
-              ylabel="chip signal / detection limit")
-        a2 = a.twinx()
-        a2.plot(tr.flow_sccm, tr.resolvable_lag_s, "s--", ms=5,
-                color=P["accent"], label="smallest resolvable lag")
-        a2.set_yscale("log")
-        a2.set_ylabel("smallest resolvable lag (s)", color=P["accent"])
-        a2.tick_params(axis="y", colors=P["accent"])
-        a2.grid(False)
-        ok = tr[tr.chip_detectable]
+        # Detectability and time resolution BOTH scale as the reciprocal of
+        # the flow, so no flow improves one without costing the other by the
+        # same factor.  Plotting one against the other shows the trade-off
+        # directly and avoids a dual-axis chart, in which the two curves would
+        # simply lie on top of each other.
+        a.plot(tr.chip_rate_over_limit, tr.resolvable_lag_s, "o-", ms=5,
+               color=P["truth"], label="operating curve")
+        for _, r in tr.iterrows():
+            a.annotate(f"{r.flow_sccm:g}", (r.chip_rate_over_limit,
+                                            r.resolvable_lag_s),
+                       textcoords="offset points", xytext=(5, -9),
+                       fontsize=6.4, color=P["neutral"])
+        a.axvline(3.0, color=P["observed"], ls=":",
+                  label=r"detectability floor (3$\times$)")
+        ok = tr[tr.chip_detectable.astype(bool)]
         if len(ok):
-            a.axvspan(tr.flow_sccm.min(), ok.flow_sccm.max(),
-                      color=P["corrected"], alpha=0.12, lw=0)
-            a.text(tr.flow_sccm.min() * 1.1, 4.0, "detectable\nbut slow",
-                   fontsize=6.8, color=P["neutral"])
-        h1, l1 = a.get_legend_handles_labels()
-        h2, l2 = a2.get_legend_handles_labels()
-        a.legend(h1 + h2, l1 + l2, fontsize=6.4, loc="lower left")
-        a.set_title("(a) the flow trade-off")
+            a.axhspan(ok.resolvable_lag_s.min(), a.get_ylim()[1] * 4,
+                      color=P["corrected"], alpha=0.10, lw=0)
+            a.text(0.05, 0.92,
+                   f"feasible only above\n{ok.resolvable_lag_s.min():.0f} s "
+                   "time resolution",
+                   transform=a.transAxes, fontsize=6.8, color=P["neutral"],
+                   va="top")
+        a.set(xscale="log", yscale="log",
+              xlabel="chip signal / detection limit",
+              ylabel="smallest resolvable lag (s)",
+              title="(a) the flow trade-off (labels: sccm)")
+        a.legend(fontsize=6.6, loc="lower right")
 
     b = ax[1]
     if s7a:
@@ -507,16 +545,18 @@ def fig7_representativeness() -> None:
                 bud["qms_flux_limit_molec_per_s"]]
         colours = [P["observed"], P["truth"], P["uncorrected"]]
         b.bar(names, vals, color=colours, width=0.6)
+        b.set_yscale("log")
+        b.set_ylim(min(vals) / 30, max(vals) * 1e5)
         for i, v in enumerate(vals):
-            b.text(i, v * 8, f"{v:.1e}", ha="center", fontsize=6.8,
+            b.text(i, v * 3.0, f"{v:.1e}", ha="center", fontsize=7,
                    color=P["neutral"])
-        b.set(yscale="log", ylabel=r"CO$_2$ flux (molecules s$^{-1}$)",
+        b.set(ylabel=r"CO$_2$ flux (molecules s$^{-1}$)",
               title="(b) sensitivity budget")
-        b.set_ylim(min(vals) / 20, max(vals) * 1e4)
-        b.text(0.02, 0.05,
-               f"field shortfall {bud['field_detector_shortfall']:.0e}"
+        b.text(0.03, 0.95,
+               f"field short by {bud['field_detector_shortfall']:.0e}"
                r"$\times$" + f"\n$f_{{rep}}$ = {bud['f_rep']:.1e}",
-               transform=b.transAxes, fontsize=6.8, color=P["accent"])
+               transform=b.transAxes, fontsize=7, color=P["accent"],
+               va="top")
 
     c = ax[2]
     if pvc:

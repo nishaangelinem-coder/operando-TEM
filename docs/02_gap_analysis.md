@@ -29,7 +29,8 @@ that no lag smaller than that uncertainty is interpreted.
 
 **Test in this project.** Study S1 calibrates h from tracer pulses and checks the
 recovered τ_dead and σ_disp against the simulator's ground truth. Study S4 shows that
-the sign of the inferred lead–lag relationship flips when the correction is omitted.
+without the correction the apparent lead–lag peak moves to the transport dead time
+and is called significant in every run.
 
 ---
 
@@ -179,8 +180,10 @@ intervention-based estimate is causal.
 randomised arm. Report the association-only estimate and the interventional estimate
 side by side.
 
-**Test.** Study S4b contrasts the observational regression coefficient with the
-interventional estimate under a deliberately confounded simulator setting.
+**Test.** Study S4b estimates a coefficient whose true value is known from the
+configuration, three ways — univariate, multivariable with controls, and two-stage
+least squares instrumented by a randomised actuator — under a deliberately
+confounded simulator setting, and reports the instrument's first-stage strength.
 
 ---
 
@@ -192,7 +195,7 @@ interventional estimate under a deliberately confounded simulator setting.
 | G2 no statistics | Event-aligned estimator + surrogate null + bootstrap | S3 |
 | G3 3D overclaim | Strict 2D/3D typology + projection-aware mobility | S5 |
 | G4 beam confound | Beam Perturbation Index from dose-series intercept | S6 |
-| G5 representativeness | f_rep + position-stratified design + heterogeneity test | S7 |
+| G5 representativeness | f_rep budget + flow trade-off + position-stratified design + perturbation-synchronised route | S7 |
 | G6 static descriptors | Dynamic descriptor set + HMM state-flux model | S2, S4 |
 | G7 open loop | Event-triggered closed-loop controller | S8 |
-| G8 causal overclaim | Interventional vs observational estimate | S4b |
+| G8 causal overclaim | Estimation against known coefficient targets; instrument-strength diagnostic | S4b |

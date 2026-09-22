@@ -48,9 +48,15 @@ zone) and validate every estimator against known truth.
 The validation gives six quantitative results. (i) Timestamped tracer pulses
 recover the transport transfer function to better than 5 ms in dead time and
 10 ms in dispersion across a fourfold flow range, with nominal interval
-coverage. (ii) Omitting that correction attenuates the event-aligned effect and
-places the apparent lead–lag peak near the transport dead time, which would be
-read as structure leading chemistry by that amount. (iii) A dose-rate series
+coverage. (ii) Omitting that correction destroys the event-aligned effect and
+places the apparent lead–lag peak at the transport dead time, where it is called
+significant in 20 of 20 runs, and would be read as structure leading chemistry
+by three seconds. (ii-b) Against a coefficient whose true value the
+configuration fixes, the dominant hazard is not confounding by the operating
+point but omitting the other, co-varying motif counts: a univariate estimate
+overstates the effect by a factor of 2.1–2.4 while a multivariable one recovers
+it to within 7 %, and a gas pulse is too weak an instrument for
+instrumental-variable identification however hard it is driven. (iii) A dose-rate series
 recovers the chemical hop rate as its zero-dose intercept and yields a Beam
 Perturbation Index that tracks the simulator's true beam-attributed event
 fraction. (iv) Projected image data under-estimate single-atom
@@ -59,13 +65,20 @@ mean-squared displacement, and the bias is corrected using only the sparse
 descriptors add essentially nothing to the explanation of the instantaneous
 rate, which a motif census already determines, but they do add forecast skill
 at longer horizons. (vi) Most consequentially, spontaneous single-atom event
-analysis against a quadrupole mass spectrometer is infeasible by roughly nine
-orders of magnitude in detector sensitivity; the route that survives is
-perturbation-synchronised analysis, in which a global actuator step drives the
-same transition across the whole chip and the imaged field becomes a sampler of
-a synchronised response rather than the source of the signal. Closed-loop
-control of dispersion is demonstrated against baselines that spend an identical
-actuation budget.
+analysis against a quadrupole mass spectrometer is infeasible by a factor of
+6.6 × 10¹¹ in detector sensitivity; the route that survives is
+randomised perturbation-synchronised analysis, in which a global actuator step
+drives the same transition across the whole chip and the imaged field becomes a
+sampler of a synchronised response rather than the source of the signal; with
+identical actuation, a randomised pulse train identifies a chip-wide response
+(+15.4 %, p = 0.02) where a periodic one identifies nothing (p = 0.89).
+Separating that response's structure-mediated part from its
+coverage-mediated part requires actuation long compared with the dissociation
+time of the motif being moved, which an 8 s pulse is not. Closed-loop control is
+evaluated against baselines spending an identical actuation budget, with the
+trigger threshold selected out of sample: it yields nothing, and the arithmetic
+says why — the budget delivers 96 s of oxidising conditions against a 274 s
+dissociation time for the clusters holding most of the metal.
 
 The deliverable is a pre-registrable protocol with its power, bias and failure
 modes measured in advance, and open code that regenerates every number.
@@ -172,12 +185,13 @@ We take these five items as specifications rather than caveats.
    fails (§4).
 5. **A negative result that changes the experimental design.** The
    representativeness and sensitivity budget rules out spontaneous
-   single-atom event analysis against a quadrupole mass spectrometer by about
-   nine orders of magnitude, and identifies perturbation-synchronised analysis
+   single-atom event analysis against a quadrupole mass spectrometer by a
+   factor of 7 × 10¹¹, and identifies perturbation-synchronised analysis
    as the route that survives (§4.6).
-6. **A closed-loop demonstration** against baselines matched on actuation
+6. **A closed-loop evaluation** against baselines matched on actuation
    budget, so that the comparison isolates *when* actuation is spent rather than
-   how much (§4.7).
+   how much — and which returns a null whose cause is quantitative and
+   therefore actionable (§4.9).
 
 What this paper does not contain is any measurement. §5.4 states plainly what
 would have to be done experimentally before any of the scientific questions in
@@ -249,7 +263,7 @@ MS channels and normalised by the Pt inventory *in the reactive zone*.
 | E5 | elastic net with reactor terms partialled out | confounding by the operating point |
 | E6 | Gaussian hidden Markov model on D(t), giving motif regimes and their transition matrix | static descriptors |
 | E7 | dose-series intercept and the Beam Perturbation Index | beam confound |
-| E8 | two-stage least squares instrumented by a randomised actuator | association vs intervention |
+| E8 | two-stage least squares instrumented by a randomised actuator | association vs intervention (found unusable here: §4.5) |
 
 Two rules are enforced in code rather than left to the analyst: a lead–lag peak
 smaller than 2 σ_disp is refused the label "significant", and an event-aligned
@@ -572,34 +586,72 @@ pull against each other**. That is the practical envelope of the method.
 
 ### 4.5 What skipping the transport correction costs (S4)
 
-Identical data, three correction levels (Table S4a, Fig. 5):
+Identical data, three correction levels, 20 runs each (Table S4a, Fig. 5):
 
 | correction | rate RMSE (molec s⁻¹) | Δ recovered | Δ/Δ_W | p (surrogate) |
 |---|---|---|---|---|
-| none | 0.0175 | 0.0002 | **0.005** | 0.35 |
-| delay-only shift | 0.0062 | 0.0110 | 0.29 | 0.047 |
-| deconvolution | 0.0053 | 0.0192 | **0.50** | 0.011 |
+| none | 0.0188 | −0.0017 | **−0.04** | 0.36 |
+| delay-only shift | 0.0067 | 0.0111 | 0.29 | 0.071 |
+| deconvolution | 0.0059 | 0.0186 | **0.49** | 0.029 |
 
-Uncorrected, the effect is gone — recovery 0.5 %, and the surrogate test does not
-reject. A delay-only shift recovers 29 %; full deconvolution recovers 50 %. The
-lead–lag result is starker (Table S4b): **without correction the peak sits at
-3.0 s in every run** — the transport dead time is 3.20 s — and the estimator
-would be called significant in 4 of 4 runs. After either correction the peak
-moves to 0 s and the resolution gate correctly declines to call it significant
-in 0 of 4. An uncorrected analysis would therefore report that the structure
-leads the chemistry by three seconds, when the true lag is zero and the three
-seconds are plumbing.
+Uncorrected, the effect is gone — recovery −4 %, indistinguishable from zero, and
+the surrogate test does not reject. A delay-only shift recovers 29 %; full
+deconvolution recovers 49 % of the window-averaged truth and reduces the rate
+reconstruction error threefold.
 
-Under deliberate confounding by a slow temperature modulation, which moves both
-structure and rate (Table S4c), the naive regression of rate on dimer count
-gives β = 0.201 ± 0.013, the elastic net with reactor variables partialled out
-gives 0.433, and two-stage least squares instrumented by a randomised O₂ pulse
-gives 0.373 ± 0.294. The naive estimate is biased low by about a factor of two.
-But the instrument is weak — first-stage R² = 0.009 — so the interventional
-estimate, while unbiased in expectation, is imprecise. **The design requirement
-is therefore that the randomised actuator must move the structural variable
-strongly**; a first-stage R² of one per cent is not an instrument, and reporting
-a 2SLS coefficient from one would be reporting noise.
+The lead–lag result is starker (Table S4b). **Without correction the peak sits
+at 3.05 ± 0.22 s** — the transport dead time is 3.202 s — and the estimator is
+called significant in 20 of 20 runs. After either correction the peak moves to
+0.00–0.05 s and the resolution gate correctly declines to call it significant in
+0 of 20. An uncorrected analysis would therefore report that the structure leads
+the chemistry by three seconds, when the true lag is zero and the three seconds
+are plumbing.
+
+**Estimating a coefficient whose true value is known.** The rate change per
+additional dimer is fixed by the configuration: ∂r/∂N₂ = 0.1036 molecules s⁻¹
+per dimer, and because the regression uses the *observed* dimer count, which is
+biased +13.4 % (§4.3), the target for an observed-variable regression is
+0.1036/1.134 = 0.0913. Under a deliberately confounded slow temperature
+modulation, and with the reactor variables controlled throughout (Table S4c,
+20 runs per arm):
+
+| estimator | weak instrument arm | strong instrument arm | target | ratio |
+|---|---|---|---|---|
+| univariate OLS on N₂ | 0.1949 ± 0.0130 | 0.2189 ± 0.0319 | 0.0913 | **2.13 / 2.40** |
+| multivariable OLS on N₁, N₂, N₃ | 0.0976 ± 0.0051 | 0.0904 ± 0.0122 | 0.0913 | **1.07 / 0.99** |
+| 2SLS instrumented by the actuator | 0.350 ± 1.053 | −0.241 ± 1.161 | 0.0913 | 3.8 / −2.6 |
+
+Three conclusions, and the first is not the one we expected.
+
+**The dominant hazard is omitted co-varying motifs, not confounding by the
+operating point.** The univariate estimate overstates the effect by a factor of
+2.1–2.4 even though temperature and both partial pressures are controlled,
+because the monomer count co-varies with the dimer count and its contribution
+is absorbed into the dimer coefficient. The multivariable fit, which includes
+the monomer and trimer counts, recovers the known value to within 1–7 %, and
+also recovers the monomer coefficient (0.0344 and 0.0431 against a target of
+0.0331). **Reporting a structural coefficient from a model that omits the other
+motifs is the error to avoid**, and it is a more common error than the one the
+causal-inference framing was built to address.
+
+**The actuator is a weak instrument, and making it stronger does not help.**
+First-stage R² is 0.015 for an 8 s pulse at 20 % O₂ and 0.051 for a 30 s pulse
+at 60 % O₂; the resulting 2SLS estimates have standard deviations an order of
+magnitude larger than the coefficient. The reason is physical: the dimer
+population is set by a fast local equilibrium — formation and oxygen-accelerated
+dissociation with a 3.4 s lifetime — so a gas pulse perturbs it only while the
+pulse lasts. **Instrumental-variable identification in this system requires an
+actuator that moves the structural variable persistently, and a gas pulse is not
+one.** That is a design result, not an estimation failure, and it is a constraint
+on the "actuators as instruments" element of the framework as originally
+proposed (§2).
+
+**The observational route is therefore the usable one here**, provided the model
+is specified over the full motif census. That conclusion is specific to a system
+whose structure re-equilibrates faster than the actuator can hold it; a
+support-anchored motif with a long lifetime would behave differently, and
+testing which regime a real catalyst is in is a measurement the platform can
+make (the dimer lifetime is recovered to −12 %, §4.3).
 
 ### 4.6 Projected mobility is biased, and the bias is not correctable at 6.6 nm depth resolution (S5)
 
@@ -740,43 +792,93 @@ the heterogeneity is significant (one-way ANOVA F = 25.0, p = 2.1 × 10⁻⁴,
 measurement of the catalyst**, and a position-stratified design is the minimum
 defence.
 
-**What survives: randomised global perturbation.** A global O₂ step drives the
-same transition in every patch at once, so the chip-averaged rate responds even
-at f_rep ≈ 10⁻¹². Two design requirements emerge (Table S7g). First, the
-perturbation must be randomised: under a circular-shift null a strictly periodic
-pulse train realigns with itself after one period, the null contains values as
-large as the observed effect, and nothing can be concluded. That is the correct
-answer — with a purely periodic driver, temporal coincidence carries almost no
-information — and it is a caution about reading causation from oscillatory
-coincidence generally. Second, the direct coverage-mediated response must be
-separated from the structure-mediated one; raising p_O₂ changes the coverages and
-therefore the rate immediately, with no involvement of the catalyst's structure.
-Blanking a gap of the pulse duration plus three transport dispersions and
-measuring what survives isolates the structural component.
+**What survives, and how far it gets.** A global O₂ step drives the same
+transition in every patch at once, so the chip-averaged rate responds even at
+f_rep ≈ 5 × 10⁻¹². Two arms, 42 pulses each, four runs per arm (Table S7g):
 
-### 4.9 Closed-loop control: the actuation helps, the timing does not (S8)
+| arm | signal | window | Δ relative | p (surrogate) | z |
+|---|---|---|---|---|---|
+| periodic | chip rate | during pulse | +8.3 % | 0.89 | 0.27 |
+| periodic | chip rate | after pulse, gap blanked | −0.6 % | 0.99 | −0.02 |
+| randomised | chip rate | during pulse | **+15.4 %** | **0.020** | 2.31 |
+| randomised | chip rate | after pulse, gap blanked | +18.4 % | 0.23 | 1.44 |
+
+Three things follow.
+
+**Randomisation is not optional.** The periodic arm shows a +8.3 % response and
+identifies nothing: p = 0.89 against the circular-shift null, because shifting
+the trace by one pulse period realigns it with itself and the null contains
+values as large as the observation. That is the correct answer — with a strictly
+periodic driver, temporal coincidence carries almost no information — and it is a
+caution about reading causation from oscillatory coincidence generally. The
+randomised arm, with the same number of pulses and the same actuation, recovers
+a response of +15.4 % at p = 0.020.
+
+**A chip-wide response is detectable at a representativeness fraction of
+5 × 10⁻¹².** This is the positive result: global perturbation converts an
+unmeasurable single-field signal into a measurable chip-averaged one, and the
+imaged field's role becomes that of a sampler of the synchronised structural
+response rather than the source of the product signal.
+
+**But the structure-mediated component is not separated here.** Blanking a gap
+of the pulse duration plus three transport dispersions leaves a larger point
+estimate (+18.4 %) with eight times the between-run scatter and p = 0.23, and
+the imaged field's dispersed fraction moves by only −1.8 % across the same
+windows. The reason is kinetic and quantitative: an 8 s pulse is long compared
+with the 3.4 s dimer lifetime but very short compared with the ~270 s
+dissociation time of the four-plus-atom clusters that hold most of the Pt by
+this point in the run, so the pulse changes coverages and barely changes
+structure. **Isolating a structure-mediated response requires actuation long
+compared with the dissociation time of the motif one intends to move** — which
+is a quantity the platform itself measures (§4.3) and which therefore sets the
+actuation protocol rather than being discovered after the fact.
+
+### 4.9 Closed-loop control: a null, and the arithmetic that explains it (S8)
 
 All policies spend an identical budget of 24 oxygen pulses, so the comparison
-isolates *when* the budget is spent. Averaged over the seeds, deactivation is
-substantial in this system: the open-loop rate falls by roughly a factor of
-three over 900 s as Pt accumulates in clusters of four or more atoms, and both
-actuated policies slow that decline.
+isolates *when* the budget is spent. Twenty-four paired simulator seeds were
+used, split into ten for choosing the trigger threshold and fourteen, disjoint,
+for evaluating it.
 
-The headline, from the held-out comparison (Table S8b), is a null. The trigger
-threshold was chosen on one set of simulator seeds and the paired comparison
-made on a disjoint set. In sample the event-triggered policy appeared to give
-about +7 % integrated yield over the budget-matched fixed schedule; on held-out
-seeds the difference is negligible and far from significant. **Event triggering
-buys nothing over a fixed schedule once its threshold is chosen honestly.** The
-in-sample value is reported alongside so that the selection optimism is visible,
-and the minimum detectable effect is reported so that the null can be read as an
-exclusion of a large gain rather than merely as a failure to reject.
+**The result is a null, and a broader one than expected** (Table S8b). On the
+selection seeds the best threshold (N₍≥3₎ = 5) appeared to give +9.0 % over the
+budget-matched fixed schedule. On the held-out seeds the ratio is 0.98 —
+event-triggered 882.8 molecules against fixed-schedule 900.2 — with a paired
+p = 0.67. The end-of-run rate is, if anything, worse (0.397 against 0.498,
+paired p = 0.070). **The apparent +9 % was selection optimism, and nothing
+survives it.**
 
-The reason is visible in the trajectories (Fig. 8b): deactivation here is a
-smooth, near-monotonic drift, and a fixed schedule is already close to optimal
-against a smooth drift. Event triggering should pay only when deactivation is
-bursty, so that there is something to anticipate — a testable prediction, and the
-natural next step for the control layer rather than a claim we can make now.
+The null extends to the actuation itself. Open loop yields 847.4 and the fixed
+schedule 900.2, a nominal +6 %, but the paired comparison of the event-triggered
+policy against open loop gives p = 0.41, and the spread across seeds (standard
+deviations of 97–111 molecules on yields of ~880) swamps the differences. The
+minimum detectable effect of this design at 80 % power is 112 molecules, or
+12.5 % of the baseline: **we can exclude an improvement larger than about 12 %,
+and we detect nothing smaller.**
+
+**Why, quantitatively.** The reason is the same one that limited the
+perturbation-synchronised analysis of §4.8, and it is arithmetic rather than
+control theory. Redispersing Pt requires oxygen-accelerated dissociation of the
+clusters that hold most of the metal, and at the pulse composition the
+characteristic dissociation times are 2.1 s for a dimer, 36 s for a trimer,
+274 s for a tetramer and 922 s for a pentamer. The budget delivers
+24 × 4 s = 96 s of oxidising conditions over a 900 s run. **It is short by a
+factor of roughly three against a single turnover of the tetramer reservoir, and
+by an order of magnitude against the larger clusters** — so no scheduling of
+that budget can redisperse the population that matters, and the policies differ
+only in when they briefly perturb the dimers, which re-form within seconds
+anyway.
+
+This turns a negative result into a design specification: **the actuation
+budget must be set from the dissociation time of the motif to be moved, not
+chosen for convenience**, and that time is a quantity the platform measures
+(§4.3). It also identifies the condition under which event triggering should
+begin to matter — a deactivation process that is bursty rather than smooth, so
+that there is something to anticipate. The trajectories here (Fig. 8b) are
+smooth and near-monotonic, and against a smooth drift an evenly spaced schedule
+is already close to optimal. Testing the bursty case requires a simulator
+channel we did not implement, and we state it as a prediction rather than a
+result.
 
 ## 5. Discussion
 
@@ -793,7 +895,9 @@ the transport line are *not* the limiting elements once the transfer function is
 measured. Detrending behaves as intended, removing a linear drift by more than
 an order of magnitude while leaving an injected step intact. The lead–lag
 resolution gate does its job: the uncorrected trace produces a spurious peak at
-the transport dead time in every run, and the gate refuses it in every run.
+the transport dead time in 20 of 20 runs, and the gate refuses it in 20 of 20. A
+multivariable observational regression over the full motif census recovers a
+coefficient whose true value is known to within 7 %.
 
 **Works, with a caveat that changes the experiment.** Event-aligned analysis
 recovers the known single-event effect, but only when the dimensionless event
@@ -807,7 +911,21 @@ one decade, and the standard linear-in-dose model is misspecified whenever the
 support presents a distribution of diffusion barriers, because the observable
 effective hop rate is then a harmonic mean and sublinear in dose.
 
-**Does not work as proposed.** Two things fail.
+**Does not work as proposed.** Three things fail.
+
+Instrumental-variable identification fails, and for a physical reason rather
+than a statistical one. The framework was built partly on the idea that the
+reactor's actuators could serve as instruments; in this system they cannot,
+because the dimer population re-equilibrates on a 3.4 s timescale and a gas
+pulse therefore perturbs it only while the pulse lasts. First-stage R² is 0.015
+for a short pulse and only 0.051 for one nearly four times longer and three
+times stronger, and the resulting estimates are useless. The finding does not
+retire the idea — a long-lived, support-anchored motif would behave differently,
+and the platform can measure which regime it is in — but it does mean that the
+usable estimator here is the observational one, and that its specification over
+the full motif census matters more than the causal machinery does. The error
+that actually bites is mundane: omitting a co-varying motif count inflates the
+coefficient by a factor of two.
 
 The projection-aware mobility correction fails, and it fails for a reason that
 is a property of the instrument rather than of the estimator: at 6.6 nm depth
@@ -820,17 +938,26 @@ resolution, which is exactly what tilt-coupled multislice ptychography now
 delivers [R9]; that is a concrete instrument requirement rather than an
 analysis choice.
 
-Event-triggered control gives no advantage over a budget-matched fixed schedule
-once the trigger threshold is chosen out of sample. In sample it appeared to
-give about +7 %; on held-out seeds the difference vanished. Both actuated
-policies beat the un-actuated baseline, so the actuation itself helps; the
-*timing intelligence* does not. The reason is visible in the trajectories:
-deactivation in this system is a smooth, near-monotonic drift, and a fixed
-schedule is already close to optimal against a smooth drift. Event triggering
-should be expected to pay only when deactivation is bursty, so that there is
-something to anticipate. That is a testable prediction, and the natural next
-step for the control layer is to test it against a simulator with an explicit
-avalanche channel rather than to claim the gain here.
+The control layer produces nothing measurable. Event triggering gives no
+advantage over a budget-matched fixed schedule once the threshold is chosen out
+of sample (held-out ratio 0.98, p = 0.67, against an apparent +9 % in sample),
+and the actuation itself is not distinguishable from doing nothing either
+(p = 0.41 against open loop). With 14 paired held-out seeds the design excludes
+improvements larger than about 12 %.
+
+The explanation is arithmetic and it is the same one that limited the
+perturbation-synchronised analysis. At the pulse composition, oxygen-accelerated
+dissociation takes 2.1 s for a dimer but 274 s for a tetramer and 922 s for a
+pentamer, and the tetramers and above are where most of the Pt has gone by the
+end of the run. The budget delivers 96 s of oxidising conditions in total. It is
+short by a factor of three against one turnover of the tetramer reservoir, so no
+schedule of that budget can redisperse the population that matters. The
+actionable version is that **the actuation budget has to be set from the
+dissociation time of the motif one intends to move**, which is a quantity the
+platform measures. Event triggering should additionally be expected to pay only
+when deactivation is bursty rather than smooth, and the trajectories here are
+smooth; testing that needs a simulator channel we did not implement, so we state
+it as a prediction.
 
 ### 5.2 The finding that changes the experimental design
 
@@ -840,8 +967,9 @@ and it is arithmetic rather than statistics.
 One 40 × 40 nm field of view holds of order 10²–10³ Pt atoms. A realistic chip,
 with a ~100 nm catalyst film over a 200 × 50 µm reactive zone, holds of order
 10¹³. The representativeness fraction is therefore about 5 × 10⁻¹², and the
-imaged atoms generate a product flux around ten orders of magnitude below the
-flux detection limit of a quadrupole mass spectrometer. **Spontaneous
+imaged atoms generate a product flux 6.6 × 10¹¹ times below the flux
+detection limit of a quadrupole mass spectrometer -- nearly twelve orders of
+magnitude. **Spontaneous
 single-atom event analysis against a product detector is not difficult; it is
 excluded.** No improvement in microscopy changes this, because the limitation
 is on the product side.
@@ -857,19 +985,27 @@ the sub-second scale of the atomic events being imaged.** This trade-off appears
 not to be stated anywhere in the literature we reviewed, and it bounds what any
 "structure–activity correlation" from such an experiment can mean.
 
-What survives is perturbation-synchronised analysis. A global actuator step
-drives the same transition in every patch of the chip simultaneously, so the
-chip-averaged signal responds even at f_rep ≈ 10⁻¹², and the imaged field
-becomes a *sampler of a synchronised response* rather than the source of the
-signal. Two design requirements follow, and both are demonstrated here. The
-perturbation must be **randomised, not periodic**: under a circular-shift null a
-strictly periodic pulse train realigns with itself and carries essentially no
-inferential power, which is the correct answer and is also a caution about
-reading causation from oscillatory coincidence. And the direct
-(coverage-mediated) response must be separated from the structure-mediated one,
-which we do by blanking a gap of the actuation duration plus several transport
-dispersions and measuring what survives afterwards, when the gas composition has
-returned to baseline.
+What survives is perturbation-synchronised analysis, and it gets part of the
+way. A global actuator step drives the same transition in every patch of the
+chip simultaneously, so the chip-averaged signal responds even at
+f_rep ≈ 5 × 10⁻¹², and the imaged field becomes a *sampler of a synchronised
+response* rather than the source of the signal. The perturbation must be
+**randomised, not periodic**: with the same 42 pulses and the same actuation,
+the randomised arm identifies a +15.4 % response at p = 0.020 while the periodic
+arm identifies nothing at p = 0.89, because under a circular-shift null a
+periodic train realigns with itself. That is the correct answer, and it is also
+a caution about reading causation from oscillatory coincidence generally.
+
+Separating the direct, coverage-mediated response from the structure-mediated
+one is harder, and we did not achieve it. Blanking a gap of the actuation
+duration plus three transport dispersions leaves a point estimate that is larger
+but eight times noisier (p = 0.23), and the field's dispersed fraction barely
+moves. The kinetics explain it: an 8 s oxygen pulse is long compared with the
+3.4 s dimer lifetime but far shorter than the ~270 s dissociation time of the
+clusters holding most of the Pt, so it moves coverages and not structure. The
+requirement this establishes is specific and usable — actuation must be long
+compared with the dissociation time of the motif one intends to move, and that
+time is something the platform measures.
 
 ### 5.3 The hypothesis, partly refuted
 
@@ -963,7 +1099,14 @@ In order, and with the gating criterion for each step:
    linear and the site-aware model, with the barrier distribution taken from a
    beam-off temperature series.
 6. **Use randomised global perturbations** and the gap-blanked estimator to
-   separate coverage-mediated from structure-mediated responses.
+   separate coverage-mediated from structure-mediated responses — and specify
+   every regression over the full motif census, not over the one motif of
+   interest. Report the actuator's first-stage strength before reporting any
+   instrumented estimate; below a first-stage R² of a few per cent, do not
+   report one.
+6b. **Size the actuation budget from the kinetics**, not from convenience:
+   integrated actuation time must be comparable to the dissociation time of the
+   motif to be moved, measured beforehand.
 7. **Cross-validate the inferred motif** against operando XAS, DRIFTS or Raman
    on the same batch outside the microscope, and against DFT and microkinetic
    modelling. The microscope establishes *which structures exist and when*; it
@@ -988,19 +1131,26 @@ Three results should change how such experiments are designed. The transport
 transfer function must be measured, not assumed: uncorrected, the analysis
 places the apparent lead–lag peak at the transport dead time and would read the
 structure as leading the chemistry by that amount. The imaged field's product
-flux is roughly ten orders of magnitude below any product detector's limit, so
+flux is nearly twelve orders of magnitude below any product detector's limit,
+so
 spontaneous single-atom event analysis is excluded and randomised global
 perturbation is the only route that identifies anything. And the flow that makes
 the product detectable makes the product-linked time resolution tens of seconds,
 which bounds what any structure–activity correlation from a nanoreactor
 experiment can mean.
 
-Two of our own proposals did not survive their tests. Dynamic descriptors do not
-out-explain a motif census for the instantaneous rate, though they do add
-forecast skill over one to two minutes. Event-triggered control gave no
-advantage over a budget-matched fixed schedule once its threshold was chosen out
-of sample. We report both, because a protocol whose failure modes are unknown is
-not a protocol.
+Three of our own proposals did not survive their tests. Dynamic descriptors do
+not out-explain a motif census for the instantaneous rate, though they do add
+forecast skill over one to two minutes. Instrumental-variable identification
+using the reactor's actuators fails in this system, because the structure
+re-equilibrates faster than a gas pulse can hold it; the error that actually
+matters is the mundane one of omitting a co-varying motif count, which inflates
+a structural coefficient twofold. And closed-loop control produced nothing
+measurable — neither the triggering nor the actuation — because the budget was
+three times too small to turn over the clusters holding the metal. We report all
+three, because a protocol whose failure modes are unknown is not a protocol, and
+because the third failure converts into a specification: size the actuation
+budget from the dissociation time of the motif to be moved.
 
 What we offer is therefore not a discovery about platinum but a pre-registrable
 analysis protocol with its bias, power and operating limits measured in advance,
@@ -1078,15 +1228,19 @@ paper's central weakness (the validation is circular wherever it concerns the
 structure–activity map the simulator imposes), the results whose prose is
 stronger than their tables (forecast skill; the closed-loop null read as an
 exclusion), the single most load-bearing estimated quantity (the catalyst-area
-multiplier), and eight prioritised improvements. Five of the eight were acted on
+multiplier), and eight prioritised improvements. Five of its recommendations were acted on
 before this version: the simulated-data declaration was moved into the first
-sentence of the abstract; the seed count was raised for the two underpowered
-studies; the representativeness fraction is now reported as a sensitivity band
-over its estimated multiplier; a strong-instrument arm was added to the
-interventional comparison; and the rendered micrograph panel was watermarked.
-Three remain open and are stated as such: adding a bursty-deactivation mode to
-the twin in order to scope the control null, splitting the manuscript for
-publication, and dropping the coinage.
+sentence of the abstract; the seed count was raised to 20 and 24 for the two
+underpowered studies, which changed the closed-loop conclusion from a marginal
+negative to a clear null with a stated minimum detectable effect; the
+representativeness fraction is reported as a sensitivity band over its estimated
+multiplier; a strong-instrument arm was added to the interventional comparison,
+and it failed, which is itself §4.5's result; and the rendered micrograph panel
+was watermarked. Four remain open and are stated as such: raising the seed count
+for S5, S7 and the S3 controls; adding a bursty-deactivation mode to the twin in
+order to scope the control null; splitting the manuscript for publication; and
+rebalancing §2 towards the estimator that actually worked, since the
+causal-inference framing the paper opens with did not survive its own test.
 
 ## Author contributions
 

@@ -134,45 +134,105 @@ def _instrument_arm(cfg, s, strength: str):
     return exp, t_r, r_hat, d, x, z, len(z_times)
 
 
+def coefficient_targets(cfg) -> dict:
+    """Known partial derivatives of the rate with respect to each motif count.
+
+    These are the targets a multivariable regression should recover.  Because
+    the regression is run on the *observed* counts, and detection is
+    size-dependent, each target is divided by one plus that descriptor's
+    measured relative bias (study S2a): a descriptor that is under-counted by
+    a factor f carries a coefficient inflated by 1/f.
+    """
+    from opcem.truth import site_occupancy, tof_entity
+    t_k = cfg.reactor.t_setpoint_c + 273.15
+    p_co = cfg.reactor.x_co * cfg.reactor.p_total_mbar / 1000.0
+    p_o2 = cfg.reactor.x_o2 * cfg.reactor.p_total_mbar / 1000.0
+    _occ, _k, mult = site_occupancy(cfg, t_k, cfg.imaging.dose_rate)
+    raw = {n: tof_entity(cfg, n, "terrace", t_k, p_co, p_o2) * mult
+           for n in (1, 2, 3)}
+    bias = {1: -0.412, 2: +0.134, 3: -0.0005}      # Table S2a
+    return {"raw": raw,
+            "observed_scale": {n: raw[n] / (1.0 + bias[n]) for n in raw}}
+
+
 def run_s4b(cfg=DEFAULT, seed: int = 62):
-    """Observational vs interventional estimate under a known confounder."""
+    """Observational and interventional estimates against known targets.
+
+    Three estimators of the same quantity -- how much the rate changes per
+    additional dimer -- are compared against a target that is known exactly
+    from the configuration: the partial derivative of the rate with respect to
+    the dimer count, divided by one plus the dimer count's measured detection
+    bias.
+
+    The point of the comparison is that a *univariate* regression has no such
+    target, because the motif counts co-vary: omitting the monomer count makes
+    the dimer coefficient absorb the monomers' covariance. Both the univariate
+    and the multivariable versions are therefore reported, and the gap between
+    them is the omitted-variable bias.
+
+    Confounding is imposed by a slow temperature modulation, which moves both
+    structure and rate. The instrument is a randomised oxygen pulse, run at two
+    strengths.
+    """
     # Technical loading: this estimator does not need single events to be
     # temporally resolvable, only the population to respond to the instrument.
     cfg = K.short_cfg(DURATION)
+    tgt = coefficient_targets(cfg)
+    t2 = tgt["observed_scale"][2]
+    t1 = tgt["observed_scale"][1]
     rows = []
     for s in SEEDS:
         for strength in ("weak", "strong"):
             _exp, t_r, r_hat, d, x, z, n_on = _instrument_arm(cfg, s, strength)
             iv = correlate.two_stage_least_squares(z, x, r_hat)
-            fit = correlate.fit_elastic_net(
-                d, np.interp(d.t.to_numpy(), t_r, r_hat), ["N2"],
-                force_cols=["T_c", "p_co", "p_o2"], cfg=cfg, seed=s)
-            rows.append({"seed": s, "instrument": strength,
-                         "beta_ols_naive": iv["beta_ols"],
-                         "beta_2sls": iv["beta_2sls"],
-                         "se_2sls": iv["se_2sls"],
-                         "first_stage_r2": iv["first_stage_r2"],
-                         "beta_partial_elasticnet":
-                             fit["coef"].get("N2", np.nan),
-                         "n": iv["n"], "n_instrument_on": int(n_on)})
+            y_d = np.interp(d.t.to_numpy(), t_r, r_hat)
+            # univariate observational fit (no target: see docstring)
+            uni = correlate.ols_natural_units(d, y_d, ["N2"],
+                                              ["T_c", "p_co", "p_o2"])
+            # multivariable fit, which does have a target
+            multi = correlate.ols_natural_units(
+                d, y_d, ["N1", "N2", "N3"], ["T_c", "p_co", "p_o2"])
+            rows.append({
+                "seed": s, "instrument": strength,
+                "beta_N2_univariate": uni["coef"].get("N2", np.nan),
+                "beta_N2_multivariable": multi["coef"].get("N2", np.nan),
+                "beta_N1_multivariable": multi["coef"].get("N1", np.nan),
+                "beta_N2_2sls": iv["beta_2sls"],
+                "se_2sls": iv["se_2sls"],
+                "first_stage_r2": iv["first_stage_r2"],
+                "target_beta_N2": t2, "target_beta_N1": t1,
+                "n": iv["n"], "n_instrument_on": int(n_on)})
     df = pd.DataFrame(rows)
     summ = df.groupby("instrument", sort=False).agg(
-        beta_ols_naive=("beta_ols_naive", "mean"),
-        beta_ols_naive_sd=("beta_ols_naive", "std"),
-        beta_partial_elasticnet=("beta_partial_elasticnet", "mean"),
-        beta_2sls=("beta_2sls", "mean"), beta_2sls_sd=("beta_2sls", "std"),
+        beta_N2_univariate=("beta_N2_univariate", "mean"),
+        beta_N2_univariate_sd=("beta_N2_univariate", "std"),
+        beta_N2_multivariable=("beta_N2_multivariable", "mean"),
+        beta_N2_multivariable_sd=("beta_N2_multivariable", "std"),
+        beta_N1_multivariable=("beta_N1_multivariable", "mean"),
+        beta_N2_2sls=("beta_N2_2sls", "mean"),
+        beta_N2_2sls_sd=("beta_N2_2sls", "std"),
         first_stage_r2=("first_stage_r2", "mean"),
+        target_beta_N2=("target_beta_N2", "first"),
+        target_beta_N1=("target_beta_N1", "first"),
         n_seeds=("seed", "count")).reset_index()
+    summ["univariate_over_target"] = (summ.beta_N2_univariate
+                                      / summ.target_beta_N2)
+    summ["multivariable_over_target"] = (summ.beta_N2_multivariable
+                                         / summ.target_beta_N2)
+    summ["2sls_over_target"] = summ.beta_N2_2sls / summ.target_beta_N2
+
     report.save_table(summ, "table_S4c_observational_vs_interventional",
-                      "Effect of the dimer count on the recovered rate, "
-                      "estimated three ways under a deliberately confounded "
-                      "temperature modulation: naive OLS, elastic net with "
-                      "reactor variables partialled out, and 2SLS "
-                      "instrumented by a randomised O2 pulse, at two actuator "
-                      "strengths. A weak instrument gives an unbiased but "
-                      "imprecise estimate, so the design requirement is a "
-                      "strong one.",
-                      cfg=cfg, seed=seed)
-    report.save_json({"per_seed": df, "summary": summ},
+                      "Estimates of the rate change per additional dimer "
+                      "against a target known exactly from the configuration, "
+                      "under a deliberately confounded temperature "
+                      "modulation, at two instrument strengths (20 runs each). "
+                      "The univariate estimate has no valid target because the "
+                      "motif counts co-vary; the gap between it and the "
+                      "multivariable estimate is omitted-variable bias. The "
+                      "first-stage R2 shows that a gas pulse is a weak "
+                      "instrument for the dimer population even when strong, "
+                      "which is a design result rather than an estimation "
+                      "failure.", cfg=cfg, seed=seed)
+    report.save_json({"per_seed": df, "summary": summ, "targets": tgt},
                      "s4b_interventional", cfg=cfg, seed=seed)
     return summ

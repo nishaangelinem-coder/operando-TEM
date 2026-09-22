@@ -47,41 +47,52 @@ def fig1_platform() -> None:
     cfg = K.short_cfg(300.0)
     exp = K.build(cfg, seed=1, duration=300.0, with_chip=False)
     rng = np.random.default_rng(7)
-    k = 400
-    crop = (12.0, 12.0)
-    fov = cfg.imaging.render_field_nm
+    k = 10                      # early, while the catalyst is still dispersed
+    fov = 20.0                  # a 20 nm crop holds ~20 atoms at this density
+    crop = (10.0, 10.0)
     img = instruments.render_adf_frame(cfg, exp.patch.pos3d[k],
                                        exp.patch.sizes[k], rng,
-                                       crop_origin_nm=crop)
+                                       crop_origin_nm=crop, field_nm=fov)
     txy, tsz = instruments.crop_truth(exp.patch.pos3d[k], exp.patch.sizes[k],
                                       crop, fov)
     det = vision.detect_atoms(cfg, img)
 
-    fig, ax = plt.subplots(2, 2, figsize=(7.2, 5.4))
+    fig, ax = plt.subplots(2, 2, figsize=(7.2, 5.6))
 
     a = ax[0, 0]
     ext = [0, fov, 0, fov]
-    a.imshow(img, origin="lower", extent=ext, cmap="gray_r",
-             vmin=np.percentile(img, 1), vmax=np.percentile(img, 99.8))
+    # At 200 e-/A^2 per frame the raw counts are shot-noise dominated (mean
+    # ~0.4 counts per pixel), so the raw frame is visually uninformative even
+    # though the atoms are detectable.  What is shown is the matched-filtered
+    # image, which is what the detector operates on and what an analyst looks
+    # at; the detections are the ones found on it.
+    sig_pix = cfg.imaging.probe_sigma_nm / cfg.imaging.pixel_nm
+    from scipy import ndimage as _nd
+    disp = _nd.gaussian_filter(img - _nd.gaussian_filter(
+        img, sigma=max(8.0 * sig_pix, 8.0)), sigma=sig_pix)
+    a.imshow(disp, origin="lower", extent=ext, cmap="gray_r",
+             vmin=np.percentile(disp, 2), vmax=np.percentile(disp, 99.9))
     if len(txy):
-        a.scatter(txy[:, 0], txy[:, 1], s=90, facecolors="none",
-                  edgecolors=P["truth"], linewidths=1.0, label="ground truth")
+        a.scatter(txy[:, 0], txy[:, 1], s=70, facecolors="none",
+                  edgecolors=P["truth"], linewidths=0.9,
+                  label=f"ground truth (n={len(txy)})")
     if len(det.xy):
-        a.scatter(det.xy[:, 0], det.xy[:, 1], s=14, marker="x",
-                  color=P["observed"], linewidths=1.0, label="detected")
+        a.scatter(det.xy[:, 0], det.xy[:, 1], s=16, marker="x",
+                  color=P["observed"], linewidths=0.9,
+                  label=f"detected (n={len(det.xy)})")
     a.set(xlabel="x (nm)", ylabel="y (nm)",
-          title=f"(a) simulated ADF-STEM crop, {cfg.imaging.dose_rate:.0f} "
+          title="(a) matched-filtered ADF-STEM crop, "
+                f"{cfg.imaging.dose_rate:.0f} "
                 r"e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$")
+    a.legend(loc="upper right", fontsize=7, frameon=True, framealpha=0.88,
+             facecolor=P["surface"], edgecolor="none")
+    a.grid(False)
     # A rendered micrograph is the one panel a reader could mistake for data
     # if it were separated from its caption, so it carries the word on its face.
-    a.text(0.5, 0.5, "SIMULATED", transform=a.transAxes, fontsize=26,
-           color="#ffffff", alpha=0.35, ha="center", va="center",
-           rotation=30, zorder=6, fontweight="bold")
-    a.text(0.5, 0.5, "SIMULATED", transform=a.transAxes, fontsize=26,
-           color=P["observed"], alpha=0.30, ha="center", va="center",
-           rotation=30, zorder=7, fontweight="bold")
-    a.legend(loc="upper right")
-    a.grid(False)
+    for col, al, z in ((("#ffffff"), 0.40, 6), (P["observed"], 0.32, 7)):
+        a.text(0.5, 0.5, "SIMULATED", transform=a.transAxes, fontsize=24,
+               color=col, alpha=al, ha="center", va="center", rotation=30,
+               zorder=z, fontweight="bold")
 
     b = ax[0, 1]
     tp = exp.patch.t
@@ -110,15 +121,18 @@ def fig1_platform() -> None:
     c.plot(rec["t"][mm], rec["rate"][mm], color=P["corrected"],
            label="deconvolved")
     td = cfg.transport.tau_dead()
-    c.annotate("", xy=(70 + td, np.nanmean(tr[m])),
-               xytext=(70, np.nanmean(tr[m])),
-               arrowprops=dict(arrowstyle="<->", color=P["accent"], lw=1.0))
-    c.text(70 + td / 2, np.nanmean(tr[m]) * 1.06,
+    lo, hi = c.get_ylim()
+    c.set_ylim(lo, hi + 0.22 * (hi - lo))       # headroom for the annotation
+    lo, hi = c.get_ylim()
+    y_ann = hi - 0.07 * (hi - lo)
+    c.annotate("", xy=(104 + td, y_ann), xytext=(104, y_ann),
+               arrowprops=dict(arrowstyle="<->", color=P["accent"], lw=1.1))
+    c.text(104 + td / 2, y_ann - 0.075 * (hi - lo),
            rf"$\tau_\mathrm{{dead}}={td:.2f}$ s", color=P["accent"],
            ha="center", fontsize=7.5)
     c.set(xlabel="time (s)", ylabel=r"rate (molecules s$^{-1}$)",
           title="(c) transport delay and its removal")
-    c.legend(loc="upper right")
+    c.legend(loc="upper left", ncol=3, fontsize=6.8)
 
     d = ax[1, 1]
     doses = np.geomspace(1e2, 1e4, 40)

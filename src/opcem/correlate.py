@@ -440,3 +440,33 @@ def detection_power(cfg: Config, t: np.ndarray, y: np.ndarray,
                      "mean_delta": float(np.nanmean(deltas)),
                      "sd_delta": float(np.nanstd(deltas, ddof=1))})
     return pd.DataFrame(rows)
+
+
+def ols_natural_units(df: pd.DataFrame, y: np.ndarray, cols: Sequence[str],
+                      control_cols: Sequence[str] = ()) -> Dict[str, object]:
+    """Unpenalised OLS in the descriptors' own units, with controls included.
+
+    The elastic net standardises its design matrix, so its coefficients are in
+    units of per-standard-deviation and cannot be compared with a known partial
+    derivative.  Where a target exists, the coefficient has to be estimated in
+    natural units and without shrinkage, which is what this does.  Controls are
+    included in the same design matrix rather than partialled out first, so the
+    reported coefficients are partial effects in the usual regression sense.
+    """
+    use = [c for c in cols if c in df.columns]
+    ctl = [c for c in control_cols if c in df.columns]
+    x = df[use + ctl].to_numpy(dtype=float)
+    yy = np.asarray(y, dtype=float)
+    ok = np.isfinite(x).all(axis=1) & np.isfinite(yy)
+    x, yy = x[ok], yy[ok]
+    # drop control columns that do not vary, which would make X singular
+    keep = [i for i in range(x.shape[1]) if np.ptp(x[:, i]) > 0]
+    names = [(use + ctl)[i] for i in keep]
+    x = x[:, keep]
+    if len(yy) < len(names) + 5:
+        return {"coef": {}, "r2": np.nan, "n": int(len(yy))}
+    model = LinearRegression().fit(x, yy)
+    return {"coef": {n: float(v) for n, v in zip(names, model.coef_)},
+            "intercept": float(model.intercept_),
+            "r2": float(model.score(x, yy)), "n": int(len(yy)),
+            "controls": ctl}

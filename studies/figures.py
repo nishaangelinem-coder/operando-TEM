@@ -1,0 +1,610 @@
+"""Manuscript figures, rebuilt from the cached study outputs in results/raw.
+
+Figures are print artefacts, so only the light-mode steps of the validated
+categorical palette are used.  Every figure carries a legend, and every figure
+has a companion table under results/tables -- which is also what the palette's
+contrast warning on the aqua slot obliges (the relief rule).
+"""
+from __future__ import annotations
+
+import json
+import os
+from typing import Dict, List, Optional
+
+import numpy as np
+import pandas as pd
+
+import common as K
+from opcem import (correlate, instruments, mobility, report, transport, truth,
+                   vision)
+from opcem.config import DEFAULT
+
+P = report.PALETTE
+
+
+def load(name: str):
+    path = os.path.join(report.RAW, f"{name}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        return json.load(fh)["data"]
+
+
+def frame(obj) -> pd.DataFrame:
+    return pd.DataFrame(obj)
+
+
+def _plt():
+    report.style()
+    import matplotlib.pyplot as plt
+    return plt
+
+
+# --------------------------------------------------------------------------- #
+def fig1_platform() -> None:
+    """Example micrograph, detection, population recovery, and the MS delay."""
+    plt = _plt()
+    cfg = K.short_cfg(300.0)
+    exp = K.build(cfg, seed=1, duration=300.0, with_chip=False)
+    rng = np.random.default_rng(7)
+    k = 400
+    crop = (12.0, 12.0)
+    fov = cfg.imaging.render_field_nm
+    img = instruments.render_adf_frame(cfg, exp.patch.pos3d[k],
+                                       exp.patch.sizes[k], rng,
+                                       crop_origin_nm=crop)
+    txy, tsz = instruments.crop_truth(exp.patch.pos3d[k], exp.patch.sizes[k],
+                                      crop, fov)
+    det = vision.detect_atoms(cfg, img)
+
+    fig, ax = plt.subplots(2, 2, figsize=(7.2, 5.4))
+
+    a = ax[0, 0]
+    ext = [0, fov, 0, fov]
+    a.imshow(img, origin="lower", extent=ext, cmap="gray_r",
+             vmin=np.percentile(img, 1), vmax=np.percentile(img, 99.8))
+    if len(txy):
+        a.scatter(txy[:, 0], txy[:, 1], s=90, facecolors="none",
+                  edgecolors=P["truth"], linewidths=1.0, label="ground truth")
+    if len(det.xy):
+        a.scatter(det.xy[:, 0], det.xy[:, 1], s=14, marker="x",
+                  color=P["observed"], linewidths=1.0, label="detected")
+    a.set(xlabel="x (nm)", ylabel="y (nm)",
+          title=f"(a) simulated ADF-STEM crop, {cfg.imaging.dose_rate:.0f} "
+                r"e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$")
+    # A rendered micrograph is the one panel a reader could mistake for data
+    # if it were separated from its caption, so it carries the word on its face.
+    a.text(0.5, 0.5, "SIMULATED", transform=a.transAxes, fontsize=26,
+           color="#ffffff", alpha=0.35, ha="center", va="center",
+           rotation=30, zorder=6, fontweight="bold")
+    a.text(0.5, 0.5, "SIMULATED", transform=a.transAxes, fontsize=26,
+           color=P["observed"], alpha=0.30, ha="center", va="center",
+           rotation=30, zorder=7, fontweight="bold")
+    a.legend(loc="upper right")
+    a.grid(False)
+
+    b = ax[0, 1]
+    tp = exp.patch.t
+    b.plot(tp, exp.patch.pop[:, 0], color=P["truth"], label=r"true $N_1$")
+    b.plot(exp.desc.t, exp.desc.N1, color=P["observed"], lw=1.0,
+           label=r"observed $N_1$")
+    b.plot(tp, exp.patch.pop[:, 1], color=P["truth"], ls="--",
+           label=r"true $N_2$")
+    b.plot(exp.desc.t, exp.desc.N2, color=P["observed"], ls="--", lw=1.0,
+           label=r"observed $N_2$")
+    b.set(xlabel="time (s)", ylabel="entities in field",
+          title="(b) population recovery")
+    b.legend(ncol=2, loc="upper right")
+
+    c = ax[1, 0]
+    t_ms = exp.t_ms
+    ion = exp.ms_patch_cf.ion_current["CO2"]
+    tr = np.interp(t_ms, exp.patch.t, exp.patch.true_rate)
+    m = (t_ms > 40) & (t_ms < 130)
+    c.plot(t_ms[m], tr[m], color=P["truth"], label="true rate")
+    scale = np.nanmean(tr[m]) / np.nanmean(ion[m])
+    c.plot(t_ms[m], ion[m] * scale, color=P["uncorrected"],
+           label=r"MS ion current (scaled)")
+    rec = K.recover_rate(exp, "counterfactual", "deconvolve")
+    mm = (rec["t"] > 40) & (rec["t"] < 130)
+    c.plot(rec["t"][mm], rec["rate"][mm], color=P["corrected"],
+           label="deconvolved")
+    td = cfg.transport.tau_dead()
+    c.annotate("", xy=(70 + td, np.nanmean(tr[m])),
+               xytext=(70, np.nanmean(tr[m])),
+               arrowprops=dict(arrowstyle="<->", color=P["accent"], lw=1.0))
+    c.text(70 + td / 2, np.nanmean(tr[m]) * 1.06,
+           rf"$\tau_\mathrm{{dead}}={td:.2f}$ s", color=P["accent"],
+           ha="center", fontsize=7.5)
+    c.set(xlabel="time (s)", ylabel=r"rate (molecules s$^{-1}$)",
+          title="(c) transport delay and its removal")
+    c.legend(loc="upper right")
+
+    d = ax[1, 1]
+    doses = np.geomspace(1e2, 1e4, 40)
+    d.plot(doses, [instruments.single_atom_cnr(cfg, x) for x in doses],
+           color=P["truth"], label="single-atom CNR")
+    d.axhline(cfg.imaging.detect_threshold_cnr, color=P["observed"], ls=":",
+              label="detection threshold")
+    d2 = d.twiny()
+    d2.set_visible(False)
+    d.set(xscale="log", xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
+          ylabel="contrast-to-noise ratio",
+          title="(d) detection limit vs dose")
+    d.legend(loc="upper left")
+
+    report.save_figure(fig, "fig1_platform",
+                       "Simulated platform output. (a) rendered ADF-STEM crop "
+                       "with ground-truth and detected atom positions; (b) "
+                       "recovered monomer and dimer counts against truth, "
+                       "showing the size-dependent detection bias; (c) the "
+                       "transport delay between the true rate and the MS "
+                       "channel, and its removal by deconvolution; (d) "
+                       "single-atom contrast-to-noise against dose rate.")
+    plt.close(fig)
+
+
+def fig2_consistency() -> None:
+    """Patch kMC ensemble against the coarse-grained chip model."""
+    plt = _plt()
+    cfg = K.short_cfg(600.0)
+    ens = truth.patch_ensemble(cfg, (1, 2, 3, 4, 5, 6, 7, 8), 600.0,
+                               dose_rate=0.0, record_fps=1.0)
+    mf = truth.chip_mean_field(cfg, ens["t"], truth.Schedule(cfg),
+                               k_enc=K.k_enc(cfg), n_bins=1)
+    fig, ax = plt.subplots(1, 2, figsize=(7.2, 2.8))
+    a = ax[0]
+    for i, (name, ls) in enumerate((("N_1", "-"), ("N_2", "--"),
+                                    ("N_{4+}", ":"))):
+        col = (0, 1, 3)[i]
+        a.plot(ens["t"], ens["pop"][:, col], color=P["truth"], ls=ls,
+               label=rf"kMC ${name}$")
+        a.plot(mf["t"], mf["pop"][:, col], color=P["observed"], ls=ls, lw=1.0,
+               label=rf"chip model ${name}$")
+    a.set(xlabel="time (s)", ylabel="entities per field-equivalent area",
+          title="(a) population trajectories")
+    a.legend(ncol=2, fontsize=6.8, loc="upper right")
+
+    b = ax[1]
+    b.plot(ens["t"], ens["rate"], color=P["truth"], label="kMC ensemble mean")
+    b.fill_between(ens["t"], ens["rate"] - ens["rate_sd"],
+                   ens["rate"] + ens["rate_sd"], color=P["truth"], alpha=0.18,
+                   lw=0, label="kMC $\\pm$1 s.d. across replicas")
+    b.plot(mf["t"], mf["rate"], color=P["observed"], label="chip mean field")
+    mass_err = abs(mf["mass"][-1] / mf["mass"][0] - 1.0)
+    b.text(0.03, 0.06, f"Pt mass drift {mass_err:.1e}", transform=b.transAxes,
+           fontsize=7, color=P["neutral"])
+    b.set(xlabel="time (s)", ylabel=r"rate (molecules s$^{-1}$)",
+          title="(b) rate: microscopic vs coarse-grained")
+    b.legend(loc="upper right")
+    report.save_figure(fig, "fig2_consistency",
+                       "Consistency of the two levels of the digital twin. "
+                       "The chip model has one fitted coefficient (the "
+                       "encounter rate) and otherwise uses the kMC's own rate "
+                       "constants; Pt mass is conserved to machine precision.")
+    plt.close(fig)
+
+
+def fig3_transport() -> None:
+    plt = _plt()
+    cfg = DEFAULT
+    dt = 1.0 / cfg.ms.rate_hz
+    t = np.arange(0.0, 150.0, dt)
+    starts = [12.0, 37.0, 62.0, 87.0, 112.0]
+    u = transport.make_pulse_train(t, starts, width_s=1.0)
+    rng = np.random.default_rng(5)
+    h_true = transport.kernel_from_config(cfg, dt)
+    y = 1.7 * transport.forward(u, h_true) + 0.05
+    y = y + rng.normal(0.0, cfg.ms.noise_rel * y.max(), len(t))
+    fit = transport.calibrate_from_tracer(t, u, y, n_boot=200, seed=2)
+
+    s1 = load("s1_transport")
+    summ = frame(s1["summary"]) if s1 else None
+
+    fig, ax = plt.subplots(1, 3, figsize=(7.2, 2.5))
+    a = ax[0]
+    m = t < 40
+    a.plot(t[m], u[m] * y.max(), color=P["accent"], lw=1.0,
+           label="tracer valve (scaled)")
+    a.plot(t[m], y[m], color=P["observed"], label="MS response")
+    yp = 1.7 * transport.forward(u, fit.kernel) + 0.05
+    a.plot(t[m], yp[m], color=P["corrected"], ls="--", label="fitted model")
+    a.set(xlabel="time (s)", ylabel="ion current (a.u.)",
+          title="(a) tracer pulse and fit")
+    a.legend(loc="upper right", fontsize=7)
+
+    b = ax[1]
+    kt = np.arange(len(h_true)) * dt
+    b.plot(kt, h_true / h_true.max(), color=P["truth"], label="true kernel")
+    b.plot(fit.kernel_t, fit.kernel / fit.kernel.max(), color=P["corrected"],
+           ls="--", label="fitted kernel")
+    b.set(xlim=(0, 12), xlabel="time (s)", ylabel="h(t), normalised",
+          title="(b) impulse response")
+    b.legend(loc="upper right")
+
+    c = ax[2]
+    if summ is not None:
+        c.errorbar(summ.flow_sccm, summ.tau_fit_mean,
+                   yerr=summ.tau_fit_sd.fillna(0), fmt="o", ms=5,
+                   color=P["corrected"], capsize=3, label=r"fitted $\tau_{dead}$")
+        c.plot(summ.flow_sccm, summ.tau_true, "s--", ms=5, color=P["truth"],
+               mfc="none", label=r"true $\tau_{dead}$")
+        c.errorbar(summ.flow_sccm, summ.sigma_fit_mean,
+                   yerr=summ.sigma_fit_sd.fillna(0), fmt="^",
+                   ms=5, color=P["observed"], capsize=3,
+                   label=r"fitted $\sigma_{disp}$")
+        c.plot(summ.flow_sccm, summ.sigma_true, "v--", ms=5,
+               color=P["accent"], mfc="none", label=r"true $\sigma_{disp}$")
+    c.set(xlabel="flow (sccm)", ylabel="time (s)",
+          title="(c) recovery at three flows")
+    c.legend(fontsize=6.8, loc="upper right")
+    report.save_figure(fig, "fig3_transport",
+                       "Calibration of the gas-transport transfer function "
+                       "from timestamped tracer pulses, and recovery of its "
+                       "dead time and dispersion at three flow rates.")
+    plt.close(fig)
+
+
+def fig4_events() -> None:
+    plt = _plt()
+    from s3_events import DILUTE, DURATION, PRE, POST, expected_delta_windowed
+    cfg = K.sparse_cfg(DURATION, n_atoms=DILUTE, pre_s=PRE, post_s=POST)
+    exp = K.build(cfg, seed=201, duration=DURATION, with_chip=False)
+    rec = K.recover_rate(exp, "counterfactual", "deconvolve")
+    t_r, r_hat = rec["t"], rec["rate"]
+    ev = K.truth_event_times(exp.patch, "nucleate")
+    pre, post = PRE, POST
+    lags = np.arange(-pre, post + cfg.analysis.bin_s, cfg.analysis.bin_s)
+    stack, null_stack = [], []
+    rng = np.random.default_rng(3)
+    for e in ev:
+        seg = np.interp(e + lags, t_r, r_hat)
+        base = np.mean(seg[lags < 0])
+        stack.append(seg - base)
+    for _ in range(300):
+        e = rng.uniform(t_r[0] + pre, t_r[-1] - post)
+        seg = np.interp(e + lags, t_r, r_hat)
+        null_stack.append(seg - np.mean(seg[lags < 0]))
+    stack = np.asarray(stack); null_stack = np.asarray(null_stack)
+    m = stack.mean(0)
+    se = stack.std(0, ddof=1) / np.sqrt(len(stack))
+    nsd = null_stack.std(0, ddof=1)
+
+    s3 = load("s3_events")
+    power = frame(s3["power"]) if s3 else None
+    sweep = frame(s3["sweep"]) if s3 else None
+    _d0, dtrue, _tau = expected_delta_windowed(cfg)
+
+    fig, ax = plt.subplots(1, 3, figsize=(7.2, 2.6))
+    a = ax[0]
+    a.fill_between(lags, -2 * nsd, 2 * nsd, color=P["uncorrected"], alpha=0.25,
+                   lw=0, label=r"random-time null, $\pm2$ s.d.")
+    a.plot(lags, m, color=P["corrected"], label=f"event average (n={len(ev)})")
+    a.fill_between(lags, m - 1.96 * se, m + 1.96 * se, color=P["corrected"],
+                   alpha=0.3, lw=0, label="95% CI")
+    a.axvline(0, color=P["neutral"], lw=0.8, ls=":")
+    a.axhline(dtrue, color=P["truth"], lw=1.0, ls="--",
+              label=rf"ground truth $\Delta r$ = {dtrue:.3f}")
+    a.set(xlabel="time relative to nucleation event (s)",
+          ylabel=r"$\Delta$ rate (molecules s$^{-1}$)",
+          title="(a) event-related average")
+    a.legend(fontsize=6.8, loc="upper left")
+
+    b = ax[2]
+    if power is not None:
+        g = power.groupby("n_events").power.agg(["mean", "std"]).reset_index()
+        b.errorbar(g.n_events, g["mean"], yerr=g["std"].fillna(0), fmt="o-",
+                   ms=5, color=P["corrected"], capsize=3, label="empirical power")
+        b.axhline(0.8, color=P["observed"], ls=":", label="80% power")
+        n80 = g.loc[g["mean"] >= 0.8, "n_events"]
+        if len(n80):
+            b.axvline(n80.iloc[0], color=P["accent"], ls="--", lw=1.0,
+                      label=f"n = {int(n80.iloc[0])} events")
+    b.set(xscale="log", xlabel="number of independent events",
+          ylabel="power", ylim=(0, 1.05), title="(c) detection power")
+    b.legend(loc="lower right")
+
+    c = ax[1]
+    if sweep is not None:
+        c.errorbar(sweep.event_density_lambda_W, sweep.ratio_dec_over_W,
+                   yerr=(sweep.delta_dec_sd / sweep.delta_W).fillna(0),
+                   fmt="o-", ms=5, color=P["corrected"], capsize=3,
+                   label="deconvolved MS")
+        c.plot(sweep.event_density_lambda_W, sweep.ratio_true_over_W, "s--",
+               ms=5, mfc="none", color=P["truth"],
+               label="noise-free true rate")
+        c.axhline(1.0, color=P["neutral"], ls=":", lw=1.0,
+                  label="window-averaged truth")
+        for _, r in sweep.iterrows():
+            c.annotate(f"{int(r.n_pt_atoms)}",
+                       (r.event_density_lambda_W, r.ratio_dec_over_W),
+                       textcoords="offset points", xytext=(4, 5),
+                       fontsize=6.5, color=P["neutral"])
+        c.set(xscale="log", xlabel=r"event density $\lambda(t_{pre}+t_{post})$",
+              ylabel=r"recovered / $\Delta_W$",
+              title="(b) event-density criterion")
+        c.legend(fontsize=6.6, loc="lower left")
+    report.save_figure(fig, "fig4_events",
+                       "Event-aligned estimator in the counterfactual regime. "
+                       "(a) event-related average of the deconvolved rate "
+                       "around Pt1+Pt1 nucleation, against the window-averaged "
+                       "ground-truth effect and a random-time null; (b) "
+                       "recovery against the dimensionless event density, "
+                       "labelled by Pt atoms per field; (c) empirical power "
+                       "against the number of events.")
+    plt.close(fig)
+
+
+def fig5_correction() -> None:
+    plt = _plt()
+    s4 = load("s4_transport_effect")
+    if s4 is None:
+        return
+    df = frame(s4["per_seed"])
+    ll = frame(s4["lead_lag"])
+    order = ["raw", "shift", "deconvolve"]
+    cols = {"raw": P["uncorrected"], "shift": P["observed"],
+            "deconvolve": P["corrected"]}
+    fig, ax = plt.subplots(1, 3, figsize=(7.2, 2.5))
+
+    a = ax[0]
+    for i, meth in enumerate(order):
+        v = df.loc[df.correction == meth, "recovery_ratio"]
+        a.bar(i, v.mean(), yerr=v.std(), color=cols[meth], width=0.62,
+              capsize=4, label=meth)
+        a.text(i, v.mean() + (v.std() if np.isfinite(v.std()) else 0) + 0.04,
+               f"{v.mean():.2f}", ha="center", fontsize=7.5,
+               color=P["neutral"])
+    a.axhline(1.0, color=P["truth"], ls="--", lw=1.0, label="exact effect")
+    a.set_xticks(range(len(order))); a.set_xticklabels(order)
+    a.set(ylabel=r"recovered / true $\Delta r$",
+          title="(a) event effect recovery")
+    a.legend(fontsize=7, loc="upper left")
+
+    b = ax[1]
+    for i, meth in enumerate(order):
+        v = df.loc[df.correction == meth, "rate_rmse"]
+        b.bar(i, v.mean(), yerr=v.std(), color=cols[meth], width=0.62,
+              capsize=4)
+        b.text(i, v.mean() * 1.15, f"{v.mean():.3f}", ha="center",
+               fontsize=7.5, color=P["neutral"])
+    b.set_xticks(range(len(order))); b.set_xticklabels(order)
+    b.set(yscale="log", ylabel=r"rate RMSE (molecules s$^{-1}$)",
+          title="(b) rate reconstruction error")
+
+    c = ax[2]
+    for i, meth in enumerate(order):
+        v = ll.loc[ll.correction == meth, "peak_lag_s"]
+        c.bar(i, v.mean(), yerr=v.std(), color=cols[meth], width=0.62,
+              capsize=4)
+    td = DEFAULT.transport.tau_dead()
+    c.axhline(td, color=P["accent"], ls="--", lw=1.0,
+              label=rf"$\tau_\mathrm{{dead}}$ = {td:.2f} s")
+    c.axhline(0.0, color=P["truth"], ls=":", lw=1.0, label="true lag = 0")
+    c.set_xticks(range(len(order))); c.set_xticklabels(order)
+    c.set(ylabel="lead-lag peak (s)", title="(c) apparent lead-lag")
+    c.legend(fontsize=7, loc="upper right")
+    report.save_figure(fig, "fig5_correction",
+                       "What skipping the transport correction costs. Without "
+                       "it the event-aligned effect is attenuated and the "
+                       "lead-lag peak sits near the transport dead time, which "
+                       "would be read as the structure leading the chemistry.")
+    plt.close(fig)
+
+
+def fig6_beam() -> None:
+    plt = _plt()
+    s6 = load("s6_beam")
+    if s6 is None:
+        return
+    g = frame(s6["grouped"]); fits = frame(s6["fits"]); bpi = frame(s6["bpi"])
+    row = fits.iloc[0]
+    fig, ax = plt.subplots(1, 3, figsize=(7.2, 2.5))
+
+    a = ax[0]
+    a.errorbar(g.dose_rate, g.k_hop_obs, yerr=g.k_hop_sem.fillna(0), fmt="o",
+               ms=5, color=P["observed"], capsize=3, label="observed")
+    xx = np.linspace(0, g.dose_rate.max() * 1.05, 50)
+    a.plot(xx, row.k_chem_fit + row.beta_fit * xx, color=P["corrected"],
+           label="dose-series fit")
+    a.plot(g.dose_rate, g.truth_hop_total, "s--", ms=4, mfc="none",
+           color=P["truth"], label="true total hop rate")
+    a.axhline(row.k_chem_true, color=P["accent"], ls=":", lw=1.0,
+              label=rf"true $k_\mathrm{{chem}}$ = {row.k_chem_true:.2f}")
+    a.set(xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
+          ylabel=r"hop rate (s$^{-1}$)", title="(a) dose series")
+    a.legend(fontsize=6.6, loc="upper left")
+
+    b = ax[1]
+    b.plot(bpi.dose_rate, bpi.bpi_from_fit, "o-", ms=5, color=P["corrected"],
+           label="BPI from fit")
+    b.fill_between(bpi.dose_rate, bpi.bpi_ci_lo, bpi.bpi_ci_hi,
+                   color=P["corrected"], alpha=0.25, lw=0, label="95% CI")
+    b.plot(bpi.dose_rate, bpi.bpi_truth_hops, "s--", ms=4, mfc="none",
+           color=P["truth"], label="true beam fraction of hops")
+    b.axhline(DEFAULT.analysis.bpi_exclusion_threshold, color=P["observed"],
+              ls=":", label="pre-registered threshold")
+    b.set(xscale="log", xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
+          ylabel="beam perturbation index",
+          title="(b) BPI vs truth")
+    b.legend(fontsize=6.6, loc="upper left")
+
+    c = ax[2]
+    c.errorbar(g.dose_rate, g.frac_dispersed,
+               yerr=g.frac_dispersed_sem.fillna(0), fmt="o", ms=5,
+               color=P["observed"], capsize=3, label="observed")
+    fd = fits.iloc[2]
+    c.plot(xx, fd.k_chem_fit + fd.beta_fit * xx, color=P["corrected"],
+           label="zero-dose extrapolation")
+    c.scatter([0], [fd.k_chem_fit], marker="*", s=90, color=P["accent"],
+              zorder=5, label=f"beam-free estimate {fd.k_chem_fit:.2f}")
+    c.set(xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
+          ylabel="dispersed fraction",
+          title="(c) the reported observable")
+    c.legend(fontsize=6.6, loc="upper right")
+    report.save_figure(fig, "fig6_beam",
+                       "Separating chemistry from irradiation. The zero-dose "
+                       "intercept of a dose series recovers the chemical hop "
+                       "rate; the Beam Perturbation Index tracks the "
+                       "simulator's true beam-attributed event fraction; the "
+                       "reported dispersed fraction is itself dose-dependent "
+                       "and needs extrapolating.")
+    plt.close(fig)
+
+
+def fig7_representativeness() -> None:
+    plt = _plt()
+    s7a = load("s7a_budget")
+    pvc = load("s7b_patch_vs_chip")
+    psync = load("s7e_perturbation_sync")
+    fig, ax = plt.subplots(1, 3, figsize=(7.2, 2.7))
+
+    a = ax[0]
+    if s7a:
+        tr = frame(s7a["tradeoff"])
+        a.plot(tr.flow_sccm, tr.chip_rate_over_limit, "o-", ms=5,
+               color=P["truth"], label="chip signal / MS limit")
+        a.axhline(3.0, color=P["observed"], ls=":", label=r"3$\times$ limit")
+        a.set(xscale="log", yscale="log", xlabel="flow (sccm)",
+              ylabel="chip signal / detection limit")
+        a2 = a.twinx()
+        a2.plot(tr.flow_sccm, tr.resolvable_lag_s, "s--", ms=5,
+                color=P["accent"], label="smallest resolvable lag")
+        a2.set_yscale("log")
+        a2.set_ylabel("smallest resolvable lag (s)", color=P["accent"])
+        a2.tick_params(axis="y", colors=P["accent"])
+        a2.grid(False)
+        ok = tr[tr.chip_detectable]
+        if len(ok):
+            a.axvspan(tr.flow_sccm.min(), ok.flow_sccm.max(),
+                      color=P["corrected"], alpha=0.12, lw=0)
+            a.text(tr.flow_sccm.min() * 1.1, 4.0, "detectable\nbut slow",
+                   fontsize=6.8, color=P["neutral"])
+        h1, l1 = a.get_legend_handles_labels()
+        h2, l2 = a2.get_legend_handles_labels()
+        a.legend(h1 + h2, l1 + l2, fontsize=6.4, loc="lower left")
+        a.set_title("(a) the flow trade-off")
+
+    b = ax[1]
+    if s7a:
+        bud = s7a["budget"]
+        names = ["imaged\nfield", "whole\nchip", "MS limit\n(2 sccm)"]
+        vals = [bud["field_rate_molec_per_s"], bud["chip_rate_molec_per_s"],
+                bud["qms_flux_limit_molec_per_s"]]
+        colours = [P["observed"], P["truth"], P["uncorrected"]]
+        b.bar(names, vals, color=colours, width=0.6)
+        for i, v in enumerate(vals):
+            b.text(i, v * 8, f"{v:.1e}", ha="center", fontsize=6.8,
+                   color=P["neutral"])
+        b.set(yscale="log", ylabel=r"CO$_2$ flux (molecules s$^{-1}$)",
+              title="(b) sensitivity budget")
+        b.set_ylim(min(vals) / 20, max(vals) * 1e4)
+        b.text(0.02, 0.05,
+               f"field shortfall {bud['field_detector_shortfall']:.0e}"
+               r"$\times$" + f"\n$f_{{rep}}$ = {bud['f_rep']:.1e}",
+               transform=b.transAxes, fontsize=6.8, color=P["accent"])
+
+    c = ax[2]
+    if pvc:
+        d = frame(pvc["summary"])
+        xx = d.dose_rate.replace(0, 30)
+        c.plot(xx, d.patch_dispersed_frac, "o-", ms=5, color=P["observed"],
+               label="illuminated field")
+        c.fill_between(xx,
+                       d.patch_dispersed_frac - d.patch_sd.fillna(0),
+                       d.patch_dispersed_frac + d.patch_sd.fillna(0),
+                       color=P["observed"], alpha=0.22, lw=0)
+        c.axhline(d.chip_dispersed_frac.iloc[0], color=P["truth"], ls="--",
+                  label="un-illuminated chip")
+        c.set(xscale="log",
+              xlabel=r"dose rate (e$^-$ $\mathrm{\AA}^{-2}$ s$^{-1}$)",
+              ylabel="dispersed fraction",
+              title="(c) field vs chip state")
+        c.legend(fontsize=7, loc="lower left")
+    report.save_figure(fig, "fig7_representativeness",
+                       "The representativeness problem. (a) the flow that "
+                       "makes the product detectable is the flow that destroys "
+                       "the time resolution; (b) the imaged field's product "
+                       "flux against the whole chip's and the detection "
+                       "limit; (c) the illuminated field's structural state "
+                       "diverges systematically from the un-illuminated chip.")
+    plt.close(fig)
+
+
+def fig8_control() -> None:
+    plt = _plt()
+    s8 = load("s8_control")
+    cfg = K.short_cfg(900.0)
+    fig, ax = plt.subplots(1, 2, figsize=(7.2, 2.7))
+
+    a = ax[0]
+    if s8:
+        d = frame(s8["summary"])
+        et = d[d.policy == "event_triggered"].sort_values("threshold")
+        ol = d[d.policy == "open_loop"].iloc[0]
+        fs = d[d.policy == "fixed_schedule"].iloc[0]
+        a.errorbar(et.threshold, et.integrated_yield,
+                   yerr=et.integrated_yield_sd.fillna(0), fmt="o-", ms=5,
+                   color=P["corrected"], capsize=3, label="event-triggered")
+        a.axhline(fs.integrated_yield, color=P["observed"], ls="--",
+                  label="fixed schedule (same budget)")
+        a.axhline(ol.integrated_yield, color=P["uncorrected"], ls=":",
+                  label="open loop (no actuation)")
+        a.set(xlabel=r"trigger threshold on $N_{\geq 3}$",
+              ylabel="integrated product (molecules)",
+              title="(a) yield vs trigger threshold")
+        a.legend(fontsize=7, loc="lower right")
+
+    b = ax[1]
+    from opcem import control
+    from opcem.truth import PatchSimulator, Schedule
+    best_th = 2.0
+    if s8:
+        d = frame(s8["comparison"])
+        best_th = float(d.best_threshold.iloc[0])
+    for name, pol_f, col, ls in (
+            ("open loop", lambda: control.OpenLoop(cfg), P["uncorrected"], ":"),
+            ("fixed schedule",
+             lambda: control.FixedSchedule(cfg, duration_s=900.0),
+             P["observed"], "--"),
+            (f"event-triggered (th={best_th:g})",
+             lambda: control.EventTriggered(cfg, threshold=best_th),
+             P["corrected"], "-")):
+        pol = pol_f()
+        res = PatchSimulator(cfg, seed=701, dose_rate=cfg.imaging.dose_rate,
+                             schedule=Schedule(cfg)).run(duration=900.0,
+                                                         controller=pol)
+        w = max(1, int(round(10.0 / (res.t[1] - res.t[0]))))
+        sm = np.convolve(res.true_rate, np.ones(w) / w, mode="same")
+        b.plot(res.t, sm, color=col, ls=ls, label=name)
+    b.set(xlabel="time (s)", ylabel=r"rate (molecules s$^{-1}$, 10 s mean)",
+          title="(b) example trajectories")
+    b.legend(fontsize=7, loc="upper right")
+    report.save_figure(fig, "fig8_control",
+                       "Closed-loop control against matched baselines. All "
+                       "policies spend the same actuation budget, so the "
+                       "comparison isolates when it is spent; the advantage "
+                       "depends on the trigger threshold, which has to be "
+                       "pre-registered.")
+    plt.close(fig)
+
+
+ALL = {
+    "fig1": fig1_platform, "fig2": fig2_consistency, "fig3": fig3_transport,
+    "fig4": fig4_events, "fig5": fig5_correction, "fig6": fig6_beam,
+    "fig7": fig7_representativeness, "fig8": fig8_control,
+}
+
+
+def make_all(only: Optional[List[str]] = None) -> None:
+    for name, fn in ALL.items():
+        if only and name not in only:
+            continue
+        print(f"  {name} ...", end="", flush=True)
+        fn()
+        print(" ok")
+
+
+if __name__ == "__main__":
+    import sys
+    make_all(sys.argv[1:] or None)

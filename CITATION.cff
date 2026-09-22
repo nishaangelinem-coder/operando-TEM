@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "opcem — Catalytic Event Microscopy: transport-corrected, beam-aware causal inference from operando electron microscopy of single-atom platinum catalysts"
+message: "If you use this software or its protocol, please cite it. Note that all numerical results it produces are simulated."
+type: software
+authors:
+  - family-names: "Angeline"
+    given-names: "M. Nisha"
+    affiliation: "Department of Electronics and Communication Engineering, Velalar College of Engineering and Technology, Thindal, Erode, India"
+    email: "nishavlsidesign@gmail.com"
+license: MIT
+keywords:
+  - operando electron microscopy
+  - single-atom catalysis
+  - platinum
+  - causal inference
+  - mass spectrometry
+  - closed-loop control
+  - digital twin
+abstract: >
+  A methodology and in-silico validation for event-resolved structure-activity
+  inference in operando electron microscopy of single-atom Pt catalysts.
+  Provides a two-level digital twin (kinetic Monte Carlo of one illuminated
+  field of view plus a mass-conserving population balance for the whole
+  reactive zone), virtual ADF-STEM/EELS/quadrupole-MS instruments, and
+  ground-truth validation of eight estimators covering transport
+  deconvolution, event-aligned effects, beam-perturbation accounting,
+  projection-aware mobility, and closed-loop actuation. All numerical outputs
+  are simulated; no physical instrument was operated.

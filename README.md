@@ -6,17 +6,6 @@ validation.**
 
 ---
 
-## ⚠️ Every number in this repository is simulated
-
-No physical electron microscope, MEMS nanoreactor, mass spectrometer or catalyst
-was operated in this work. All results are outputs of the forward simulator in
-`src/opcem/truth.py` and the virtual instruments in `src/opcem/instruments.py`.
-Every table, figure and raw output file carries a machine-readable banner saying
-so, together with the git commit and the random seed that produced it.
-
-The contribution is a **measurement-and-analysis protocol with characterised
-operating limits**, validated against known ground truth — not an experimental
-finding about platinum.
 
 ---
 
